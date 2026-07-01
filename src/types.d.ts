@@ -17,3 +17,12 @@ declare module "next-auth" {
     timezone?: string;
   }
 }
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id?: string;
+    globalRole?: GlobalRole;
+    status?: UserStatus;
+    timezone?: string;
+  }
+}

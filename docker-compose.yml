@@ -17,5 +17,33 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: minio/minio:latest
+    container_name: ta_management_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ta_minio_admin
+      MINIO_ROOT_PASSWORD: ta_minio_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ta_management_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: ta_management_mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
   ta_management_pgdata:
+  ta_management_minio:

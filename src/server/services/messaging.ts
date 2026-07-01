@@ -4,12 +4,15 @@ import { AppError, PermissionError } from "@/server/errors";
 import { coursePermissions } from "@/server/auth/permissions";
 import { canAccessCourseOffering, requireCoursePermission } from "@/server/services/rbac";
 import { notifyUser } from "@/server/services/notifications";
+import { checkRateLimit, makeRateLimitKey } from "@/server/auth/rate-limit";
 
 function cleanText(body: string) {
   return body.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "").trim();
 }
 
 export async function createThread(actorId: string, input: { courseOfferingId?: string; participantIds: string[]; subject: string; body: string; type: "COURSE_GENERAL" | "PRIVATE_STAFF" | "GRADE_APPEAL" | "OFFICE_HOUR" | "ADMIN_SUPPORT" }) {
+  const limiter = checkRateLimit(makeRateLimitKey("create-thread", actorId), 20, 60 * 60 * 1000);
+  if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many messages sent", 429);
   if (input.courseOfferingId && !(await canAccessCourseOffering(actorId, input.courseOfferingId))) throw new PermissionError();
   const uniqueParticipants = Array.from(new Set([actorId, ...input.participantIds]));
   const thread = await db.messageThread.create({
@@ -45,6 +48,8 @@ export async function getThread(actorId: string, id: string) {
 }
 
 export async function replyThread(actorId: string, threadId: string, body: string) {
+  const limiter = checkRateLimit(makeRateLimitKey("reply-thread", actorId), 40, 60 * 60 * 1000);
+  if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many messages sent", 429);
   const thread = await db.messageThread.findUnique({ where: { id: threadId }, include: { participants: true } });
   if (!thread) throw new AppError("NOT_FOUND", "Thread not found", 404);
   if (thread.isClosed) throw new AppError("THREAD_CLOSED", "Closed thread cannot receive replies", 409);

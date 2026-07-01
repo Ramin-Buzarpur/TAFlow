@@ -8,6 +8,8 @@ import { getRequestMeta } from "@/server/auth/request";
 import { AppError } from "@/server/errors";
 import { parseInput } from "@/server/utils/result";
 import { forgotPasswordSchema, resetPasswordSchema } from "@/server/validation/auth";
+import { sendMail } from "@/server/email/mailer";
+import { passwordResetEmail } from "@/server/email/templates";
 
 export async function requestPasswordReset(input: unknown) {
   const data = parseInput(forgotPasswordSchema, input);
@@ -35,6 +37,10 @@ export async function requestPasswordReset(input: unknown) {
       }
     })
   ]);
+
+  const resetUrl = `${process.env.AUTH_URL || "http://localhost:3000"}/reset-password?email=${encodeURIComponent(user.email)}&token=${rawToken}`;
+  const email = passwordResetEmail(resetUrl);
+  await sendMail({ to: user.email, ...email });
 
   return { ok: true, resetToken: process.env.NODE_ENV === "production" ? undefined : rawToken };
 }

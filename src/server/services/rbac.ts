@@ -68,3 +68,13 @@ export async function canAccessCourseOffering(userId: string, courseOfferingId: 
   const permissions = await getCoursePermissions(userId, courseOfferingId);
   return permissions.has(coursePermissions.VIEW_COURSE);
 }
+
+export async function listMyCourseOfferings(userId: string) {
+  const now = new Date();
+  const roles = await db.courseRoleAssignment.findMany({
+    where: { userId, revokedAt: null, activeFrom: { lte: now }, OR: [{ activeUntil: null }, { activeUntil: { gt: now } }] },
+    include: { courseOffering: { include: { course: true, semester: true } } }
+  });
+  const byId = new Map(roles.map((r) => [r.courseOfferingId, r.courseOffering]));
+  return Array.from(byId.values());
+}

@@ -32,3 +32,13 @@ export const resetPasswordSchema = z.object({
   token: z.string().min(20).max(256),
   password: passwordPolicySchema
 });
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: passwordPolicySchema
+});
+
+export const updateProfileSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  timezone: z.string().trim().min(3).max(80).optional()
+});

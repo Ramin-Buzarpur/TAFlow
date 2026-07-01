@@ -12,6 +12,17 @@
   --purple: #7c3aed;
   --radius: 22px;
 }
+[data-theme="dark"] {
+  --bg: #0b1220;
+  --card: #111827;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --line: #1f2a3d;
+}
+[data-theme="dark"] body { background: radial-gradient(circle at 10% 0%, rgba(37,99,235,.15) 0, transparent 32%), var(--bg); }
+[data-theme="dark"] .topbar { background: rgba(17,24,39,.82); }
+[data-theme="dark"] .card, [data-theme="dark"] .list-row, [data-theme="dark"] .input, [data-theme="dark"] .textarea, [data-theme="dark"] .select, [data-theme="dark"] .btn:not(.btn-primary) { background: var(--card); color: var(--text); }
+[data-theme="dark"] .hero, [data-theme="dark"] .hero-card, [data-theme="dark"] .mock-window { background: var(--card); border-color: var(--line); }
 * { box-sizing: border-box; }
 html { direction: rtl; }
 body { margin: 0; background: radial-gradient(circle at 10% 0%, #e8f2ff 0, transparent 32%), var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif; }

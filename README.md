@@ -11,24 +11,26 @@
 - Argon2id، TOTP 2FA، rate limiting و AuditLog
 - CSS design system داخلی با RTL کامل
 - Vitest برای تست‌های واحد
-- Docker Compose برای دیتابیس محلی
+- Docker Compose برای Postgres، MinIO (S3-compatible storage) و Mailpit (SMTP محلی)
 
 ## اجرای محلی
 
 ```bash
 cp .env.example .env
 docker compose up -d
-pnpm install
-pnpm db:generate
-pnpm db:migrate --name fullstack-integrated
-pnpm db:seed
-pnpm dev
+npm install
+npm run db:generate
+npm run db:migrate -- --name init
+npm run db:seed
+npm run dev
 ```
 
 سپس:
 
 ```text
-http://localhost:3000
+http://localhost:3000        سامانه
+http://localhost:9001        کنسول MinIO (فایل‌های آپلودشده)
+http://localhost:8025        صندوق ایمیل Mailpit
 ```
 
 ## حساب‌های seed
@@ -252,8 +254,10 @@ POST /api/notifications/:id/read
 
 ## تست
 
+### تست‌های واحد
+
 ```bash
-pnpm test
+npm test
 ```
 
 تست‌ها شامل موارد زیر هستند:
@@ -263,23 +267,34 @@ pnpm test
 - status transition درخواست TA
 - CSV فارسی با BOM
 - RBAC پایه و CourseRoleAssignment
+- محدودیت نرخ درخواست (rate limiting)
+- اعتبارسنجی آپلود فایل (نوع و حجم مجاز)
+
+### تست‌های end-to-end (Playwright)
+
+```bash
+npx playwright install   # فقط بار اول، دانلود مرورگر
+npm run test:e2e
+```
+
+نیازمند دیتابیس seed‌شده و در حال اجرا (`docker compose up -d` و `npm run db:seed`) است؛ خود دستور `npm run test:e2e` سرور dev را در صورت نیاز بالا می‌آورد. یک‌بار پیش از تست‌ها با هر ۴ حساب seed لاگین شده و session ذخیره می‌شود (`tests/e2e/global-setup.ts`) تا rate limit ورود به دلیل اجرای مکرر تست‌ها فعال نشود. مسیرهای پوشش داده‌شده: ورود/خروج هر ۴ نقش، گردش‌کار کامل ایجاد فرصت → درخواست → پذیرش، دسترسی ویژه Head TA، پیام‌رسانی، ارزشیابی استاد و نظرسنجی TA، اطلاعیه‌ها و پنل ادمین، داشبوردهای نقش‌محور، دسترسی‌های ممنوع، RTL/ریسپانسیو و دارک‌مود.
+
+## آپلود فایل، ایمیل و گواهی PDF
+
+- آپلود رزومه/فایل واقعی روی S3-compatible storage (`src/server/storage/s3.ts`, `src/server/services/files.ts`)، در dev از طریق MinIO (`docker-compose.yml`، کنسول در `http://localhost:9001`).
+- ارسال ایمیل واقعی (بازیابی رمز، تایید ایمیل) از طریق SMTP (`src/server/email/mailer.ts`)، در dev از طریق Mailpit (`http://localhost:8025`).
+- گواهی فعالیت به‌صورت PDF واقعی فارسی/RTL تولید و در storage ذخیره می‌شود (`src/server/certificates/pdf.ts`، فونت Vazirmatn).
+- موتور امتیازدهی و رتبه‌بندی متقاضیان بر اساس نمره بررسی، مصاحبه و معدل (`src/server/services/scoring.ts`).
 
 ## محدودیت‌های فعلی
 
-این بسته یک نسخه full-stack قابل ادامه و قابل اجراست، اما هنوز جای polish نهایی دارد:
-
-- نصب dependencyها و build داخل این محیط انجام نشده است.
-- برخی فرم‌های UI برای سرعت توسعه ساده نگه داشته شده‌اند و می‌توانند با shadcn/ui واقعی جایگزین شوند.
-- PDF واقعی گواهی فعلاً به metadata و verification flow محدود است؛ برای production باید template PDF نهایی اضافه شود.
+- برخی فرم‌های UI برای سرعت توسعه ساده نگه داشته شده‌اند و در فاز بعدی frontend کامل می‌شوند.
 - import XLSX واقعی در سرویس gradebook قابل توسعه است؛ خروجی CSV آماده است و `exceljs` در dependencyها وجود دارد.
+- بازتولید bidi/reshaping فارسی برای متن ترکیبی فارسی-لاتین در PDF گواهی (مثل کد نقش انگلیسی داخل جمله فارسی) هنوز کامل نیست؛ متن خالص فارسی درست رندر می‌شود.
 
 ## مسیر توسعه بعدی
 
-1. نصب و اجرای محلی
-2. اجرای migration و seed
-3. تست routeها با حساب‌های seed
-4. polish UI با shadcn/ui واقعی
-5. اضافه کردن upload فایل رزومه و template گواهی
-6. اتصال SSO دانشگاهی
-7. نوشتن تست‌های e2e با Playwright
-8. deploy روی VPS یا سرویس‌های ابری
+1. تکمیل صفحات فرانت‌اند باقی‌مانده (پنل بررسی متقاضیان، مقایسه، داشبورد استاد/Head TA/ادمین، بانک استعدادها، مدیریت وظایف، تنظیمات، صفحات خطا)
+2. اتصال SSO دانشگاهی
+3. نوشتن تست‌های e2e با Playwright
+4. deploy روی VPS یا سرویس‌های ابری

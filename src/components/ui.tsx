@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { clsx } from "clsx";
+import { ThemeToggle } from "./theme-toggle";
 
 export function Topbar() {
   const links = [
-    ["/dashboard", "داشبورد"], ["/opportunities", "فرصت‌های TA"], ["/messages", "پیام‌ها"], ["/sessions", "رفع اشکال"], ["/grades", "نمرات"], ["/surveys", "نظرسنجی"], ["/certificates", "گواهی‌ها"]
+    ["/dashboard", "داشبورد"], ["/opportunities", "فرصت‌های TA"], ["/messages", "پیام‌ها"], ["/sessions", "رفع اشکال"], ["/grades", "نمرات"], ["/surveys", "نظرسنجی"], ["/evaluations/professor", "ارزشیابی استاد"], ["/certificates", "گواهی‌ها"], ["/talent-pool", "بانک استعدادها"], ["/settings", "تنظیمات"]
   ];
-  return <header className="topbar"><div className="shell nav"><Link className="brand" href="/"><span className="logo"/><span>سامانه مدیریت دستیار آموزشی</span></Link><nav className="navlinks">{links.map(([href,label]) => <Link href={href} key={href}>{label}</Link>)}</nav><div className="actions"><Link className="btn" href="/dashboard">ورود به پنل</Link></div></div></header>;
+  return <header className="topbar"><div className="shell nav"><Link className="brand" href="/"><span className="logo"/><span>سامانه مدیریت دستیار آموزشی</span></Link><nav className="navlinks">{links.map(([href,label]) => <Link href={href} key={href}>{label}</Link>)}</nav><div className="actions"><ThemeToggle/><Link className="btn" href="/dashboard">ورود به پنل</Link></div></div></header>;
 }
 
 export function Card({ children, className, style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) { return <section className={clsx("card", className)} style={style}>{children}</section>; }

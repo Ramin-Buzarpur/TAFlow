@@ -9,7 +9,15 @@ export async function globalSearch(userId: string, q: string) {
     db.courseOffering.findMany({ where: { id: { in: accessibleOfferingIds }, OR: [{ course: { title: { contains: term, mode: "insensitive" } } }, { course: { code: { contains: term, mode: "insensitive" } } }] }, include: { course: true, semester: true }, take: 5 }),
     db.tAOpportunity.findMany({ where: { status: "PUBLISHED", OR: [{ title: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }] }, include: { courseOffering: { include: { course: true } } }, take: 5 }),
     db.officeHourSession.findMany({ where: { courseOfferingId: { in: accessibleOfferingIds }, title: { contains: term, mode: "insensitive" } }, include: { courseOffering: { include: { course: true } } }, take: 5 }),
-    db.announcement.findMany({ where: { OR: [{ title: { contains: term, mode: "insensitive" } }, { body: { contains: term, mode: "insensitive" } }] }, take: 5 }),
+    db.announcement.findMany({
+      where: {
+        AND: [
+          { OR: [{ title: { contains: term, mode: "insensitive" } }, { body: { contains: term, mode: "insensitive" } }] },
+          { OR: [{ courseOfferingId: null, departmentId: null }, { courseOfferingId: { in: accessibleOfferingIds } }] }
+        ]
+      },
+      take: 5
+    }),
     db.messageThread.findMany({ where: { participants: { some: { userId } }, subject: { contains: term, mode: "insensitive" } }, take: 5 })
   ]);
   return [

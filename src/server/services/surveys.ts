@@ -10,7 +10,7 @@ function respondentHash(userId: string, surveyId: string) {
   return crypto.createHash("sha256").update(`${userId}:${surveyId}:${process.env.AUTH_SECRET || "dev"}`).digest("hex");
 }
 
-export async function createSurveyFull(actorId: string, input: { courseOfferingId: string; title: string; description?: string; type: "TA_MIDTERM" | "TA_FINAL" | "PROFESSOR_EVALUATION" | "COURSE_FEEDBACK" | "CUSTOM"; isAnonymous: boolean; minResponses: number; opensAt: Date; closesAt: Date; questions: { text: string; type: "RATING" | "TEXT" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "BOOLEAN"; required?: boolean; optionsJson?: unknown }[] }) {
+export async function createSurvey(actorId: string, input: { courseOfferingId: string; title: string; description?: string; type: "TA_MIDTERM" | "TA_FINAL" | "PROFESSOR_EVALUATION" | "COURSE_FEEDBACK" | "CUSTOM"; isAnonymous: boolean; minResponses: number; opensAt: Date; closesAt: Date; questions: { text: string; type: "RATING" | "TEXT" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "BOOLEAN"; required?: boolean; optionsJson?: unknown }[] }) {
   await requireCoursePermission(actorId, input.courseOfferingId, coursePermissions.CREATE_SURVEY);
   const survey = await db.survey.create({ data: { courseOfferingId: input.courseOfferingId, createdById: actorId, title: input.title, description: input.description, type: input.type, isAnonymous: input.isAnonymous, minResponses: input.minResponses, opensAt: input.opensAt, closesAt: input.closesAt, questions: { create: input.questions.map((q, i) => ({ ...q, orderIndex: i, optionsJson: q.optionsJson as object | undefined })) } }, include: { questions: true } });
   await writeAuditLog({ actorId, action: "CREATE", entityType: "Survey", entityId: survey.id, courseOfferingId: input.courseOfferingId, afterJson: survey });
@@ -44,12 +44,12 @@ export async function getSurveyResults(actorId: string, surveyId: string) {
   return { survey, responseCount, hidden: false };
 }
 
-export async function createAvailabilityPollFull(actorId: string, input: { courseOfferingId: string; title: string; description?: string; pollType: "CLASS_TIME" | "OFFICE_HOUR_TIME" | "MAKEUP_CLASS" | "PROJECT_SESSION" | "CUSTOM"; deadline: Date; isAnonymous: boolean; options: { label: string; startsAt?: Date; endsAt?: Date }[] }) {
+export async function createAvailabilityPoll(actorId: string, input: { courseOfferingId: string; title: string; description?: string; pollType: "CLASS_TIME" | "OFFICE_HOUR_TIME" | "MAKEUP_CLASS" | "PROJECT_SESSION" | "CUSTOM"; deadline: Date; isAnonymous: boolean; options: { label: string; startsAt?: Date; endsAt?: Date }[] }) {
   await requireCoursePermission(actorId, input.courseOfferingId, coursePermissions.CREATE_SURVEY);
   return db.availabilityPoll.create({ data: { courseOfferingId: input.courseOfferingId, createdById: actorId, title: input.title, description: input.description, pollType: input.pollType, deadline: input.deadline, isAnonymous: input.isAnonymous, status: "OPEN", options: { create: input.options.map((o, orderIndex) => ({ ...o, orderIndex })) } }, include: { options: true } });
 }
 
-export async function votePollFull(actorId: string, pollId: string, optionId: string) {
+export async function votePoll(actorId: string, pollId: string, optionId: string) {
   const poll = await db.availabilityPoll.findUnique({ where: { id: pollId } });
   if (!poll) throw new AppError("NOT_FOUND", "Poll not found", 404);
   if (!(await canAccessCourseOffering(actorId, poll.courseOfferingId))) throw new PermissionError();

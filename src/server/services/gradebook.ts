@@ -15,7 +15,7 @@ export async function getGradebook(actorId: string, courseOfferingId: string) {
   });
 }
 
-export async function createGradeCategoryFull(actorId: string, input: { courseOfferingId: string; name: string; weight: number; maxScore: number; visibility?: "STAFF_ONLY" | "STUDENT_PRIVATE" | "PUBLISHED" }) {
+export async function createGradeCategory(actorId: string, input: { courseOfferingId: string; name: string; weight: number; maxScore: number; visibility?: "STAFF_ONLY" | "STUDENT_PRIVATE" | "PUBLISHED" }) {
   await requireCoursePermission(actorId, input.courseOfferingId, coursePermissions.MANAGE_GRADEBOOK);
   const existing = await db.gradeCategory.findMany({ where: { courseOfferingId: input.courseOfferingId }, select: { weight: true } });
   const total = existing.reduce((sum, row) => sum + Number(row.weight), 0) + input.weight;
@@ -25,14 +25,14 @@ export async function createGradeCategoryFull(actorId: string, input: { courseOf
   return category;
 }
 
-export async function createGradeItemFull(actorId: string, input: { courseOfferingId: string; categoryId: string; title: string; maxScore: number; dueAt?: Date; visibility?: "STAFF_ONLY" | "STUDENT_PRIVATE" | "PUBLISHED" }) {
+export async function createGradeItem(actorId: string, input: { courseOfferingId: string; categoryId: string; title: string; maxScore: number; dueAt?: Date; visibility?: "STAFF_ONLY" | "STUDENT_PRIVATE" | "PUBLISHED" }) {
   await requireCoursePermission(actorId, input.courseOfferingId, coursePermissions.MANAGE_GRADEBOOK);
   const item = await db.gradeItem.create({ data: { ...input, createdById: actorId } });
   await writeAuditLog({ actorId, action: "CREATE", entityType: "GradeItem", entityId: item.id, courseOfferingId: input.courseOfferingId, afterJson: item });
   return item;
 }
 
-export async function upsertGradeRecordFull(actorId: string, input: { gradeItemId: string; studentId: string; score: number; feedback?: string; reason?: string }) {
+export async function upsertGradeRecord(actorId: string, input: { gradeItemId: string; studentId: string; score: number; feedback?: string; reason?: string }) {
   const item = await db.gradeItem.findUnique({ where: { id: input.gradeItemId } });
   if (!item) throw new AppError("NOT_FOUND", "Grade item not found", 404);
   await requireCoursePermission(actorId, item.courseOfferingId, coursePermissions.EDIT_ASSIGNED_GRADES);

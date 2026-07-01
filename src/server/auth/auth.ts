@@ -1,4 +1,5 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
+import type { GlobalRole, UserStatus } from "@prisma/client";
 import Credentials from "next-auth/providers/credentials";
 import Keycloak from "next-auth/providers/keycloak";
 import { PrismaAdapter } from "@auth/prisma-adapter";
@@ -8,6 +9,7 @@ import { verifyPassword } from "@/server/auth/password";
 import { checkRateLimit, makeRateLimitKey } from "@/server/auth/rate-limit";
 import { verifyTotpCode } from "@/server/auth/totp";
 import { getRequestMeta } from "@/server/auth/request";
+import { jsonSafe } from "@/server/utils/json";
 
 function sensitiveRoleNeeds2fa(globalRole: string) {
   if (process.env.AUTH_ENFORCE_2FA_FOR_STAFF !== "true") return false;
@@ -28,7 +30,7 @@ async function recordSecurityEvent(input: {
       severity: input.severity ?? "info",
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
-      metadata: input.metadata ?? {}
+      metadata: jsonSafe(input.metadata ?? {})
     }
   });
 }
@@ -167,7 +169,7 @@ if (process.env.AUTH_KEYCLOAK_ID && process.env.AUTH_KEYCLOAK_SECRET && process.
 export const authConfig = {
   adapter: PrismaAdapter(db),
   session: {
-    strategy: "database",
+    strategy: "jwt",
     maxAge: 60 * 60 * 8,
     updateAge: 60 * 15
   },
@@ -181,12 +183,21 @@ export const authConfig = {
       const existing = await db.user.findUnique({ where: { email: user.email }, select: { status: true } });
       return existing?.status !== "SUSPENDED" && existing?.status !== "DELETED";
     },
-    async session({ session, user }) {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id as string;
+        token.globalRole = user.globalRole ?? "STUDENT";
+        token.status = user.status ?? "PENDING_EMAIL";
+        token.timezone = user.timezone ?? "Asia/Baku";
+      }
+      return token;
+    },
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id;
-        session.user.globalRole = user.globalRole;
-        session.user.status = user.status;
-        session.user.timezone = user.timezone;
+        session.user.id = token.id as string;
+        session.user.globalRole = token.globalRole as GlobalRole;
+        session.user.status = token.status as UserStatus;
+        session.user.timezone = token.timezone as string;
       }
       return session;
     }

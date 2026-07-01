@@ -7,8 +7,11 @@ import { sha256 } from "@/server/auth/crypto";
 import { checkRateLimit, makeRateLimitKey } from "@/server/auth/rate-limit";
 import { getRequestMeta } from "@/server/auth/request";
 import { parseInput } from "@/server/utils/result";
-import { registerSchema } from "@/server/validation/auth";
-import { AppError, ValidationError } from "@/server/errors";
+import { registerSchema, changePasswordSchema, updateProfileSchema } from "@/server/validation/auth";
+import { AppError, ValidationError, PermissionError } from "@/server/errors";
+import { sendMail } from "@/server/email/mailer";
+import { verifyEmailEmail } from "@/server/email/templates";
+import { verifyPassword } from "@/server/auth/password";
 
 export async function registerUser(input: unknown) {
   const data = parseInput(registerSchema, input);
@@ -68,6 +71,12 @@ export async function registerUser(input: unknown) {
     return created;
   });
 
+  if (shouldVerifyEmail) {
+    const verifyUrl = `${process.env.AUTH_URL || "http://localhost:3000"}/verify-email?email=${encodeURIComponent(user.email)}&token=${rawVerificationToken}`;
+    const email = verifyEmailEmail(verifyUrl);
+    await sendMail({ to: user.email, ...email });
+  }
+
   return {
     user,
     verificationToken: process.env.NODE_ENV === "production" || !shouldVerifyEmail ? undefined : rawVerificationToken
@@ -91,3 +100,31 @@ export async function markEmailVerified(email: string, rawToken: string) {
 export type UserSafeSelect = Prisma.UserGetPayload<{
   select: { id: true; name: true; email: true; globalRole: true; status: true; timezone: true }
 }>;
+
+export async function getMyProfile(userId: string) {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, globalRole: true, status: true, timezone: true, twoFactorEnabled: true, studentProfile: true, professorProfile: true }
+  });
+  if (!user) throw new AppError("NOT_FOUND", "User not found", 404);
+  return user;
+}
+
+export async function updateMyProfile(userId: string, input: unknown) {
+  const data = parseInput(updateProfileSchema, input);
+  return db.user.update({ where: { id: userId }, data, select: { id: true, name: true, timezone: true } });
+}
+
+export async function changeMyPassword(userId: string, input: unknown) {
+  const data = parseInput(changePasswordSchema, input);
+  const user = await db.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  if (!user?.passwordHash) throw new PermissionError("Password login is not enabled for this account");
+  const valid = await verifyPassword(user.passwordHash, data.currentPassword);
+  if (!valid) throw new AppError("INVALID_PASSWORD", "Current password is incorrect", 401);
+  const passwordHash = await hashPassword(data.newPassword);
+  await db.$transaction([
+    db.user.update({ where: { id: userId }, data: { passwordHash, passwordChangedAt: new Date() } }),
+    db.session.deleteMany({ where: { userId } })
+  ]);
+  return { ok: true };
+}
