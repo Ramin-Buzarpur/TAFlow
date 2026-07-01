@@ -1,0 +1,13 @@
+import Link from "next/link";
+import { auth } from "@/server/auth/auth";
+import { dashboardSummary, adminSummary } from "@/server/services/dashboard";
+import { Topbar, Card, EmptyState, Kpi, StatusBadge } from "@/components/ui";
+import { CommandPalette } from "@/components/command-palette";
+
+export default async function DashboardPage() {
+  const session = await auth();
+  if (!session?.user?.id) return <><Topbar/><main className="shell"><EmptyState title="برای مشاهده داشبورد وارد شوید" text="ابتدا حساب کاربری خود را بسازید یا وارد پنل شوید."/></main></>;
+  const data = await dashboardSummary(session.user.id);
+  const admin = session.user.globalRole === "SYSTEM_ADMIN" || session.user.globalRole === "EDUCATION_ADMIN" ? await adminSummary() : null;
+  return <><Topbar/><CommandPalette/><main className="shell"><div className="page-title"><div><h1>داشبورد نقش‌محور</h1><p className="muted">خلاصه عملیات مهم، درخواست‌ها، جلسات و پیام‌های مرتبط با نقش شما.</p></div><Link className="btn btn-primary" href="/opportunities">فرصت‌های TA</Link></div><section className="grid grid-4"><Kpi label="درس‌های فعال من" value={data.counters.activeCourses}/><Kpi label="درخواست‌های من" value={data.counters.applications} tone="purple"/><Kpi label="جلسات پیش‌رو" value={data.counters.upcomingSessions} tone="orange"/><Kpi label="اعلان خوانده‌نشده" value={data.counters.unreadNotifications} tone="green"/></section>{admin ? <section className="grid grid-4" style={{ marginTop:18 }}><Kpi label="کل کاربران" value={admin.users}/><Kpi label="ارائه‌های درس" value={admin.offerings}/><Kpi label="فرصت‌های فعال" value={admin.opportunities}/><Kpi label="گواهی در انتظار" value={admin.certificates}/></section> : null}<section className="grid grid-3" style={{ marginTop:24 }}><Card><h2>درخواست‌های اخیر</h2><div className="stack">{data.myApplications.length ? data.myApplications.map((a) => <Link className="list-row" href={`/applications/${a.id}`} key={a.id}><div><strong>{a.opportunity.title}</strong><p className="muted">{a.opportunity.courseOffering.course.title}</p></div><StatusBadge status={a.status}/></Link>) : <p className="muted">درخواستی ثبت نشده است.</p>}</div></Card><Card><h2>جلسات آینده</h2><div className="stack">{data.sessions.map((s) => <Link className="list-row" href={`/sessions/${s.id}`} key={s.id}><div><strong>{s.title}</strong><p className="muted">{s.courseOffering.course.title}</p></div><StatusBadge status={s.status}/></Link>)}</div></Card><Card><h2>اعلان‌ها</h2><div className="stack">{data.announcements.map((a) => <div className="list-row" key={a.id}><div><strong>{a.title}</strong><p className="muted">{a.priority}</p></div></div>)}</div></Card></section></main></>;
+}

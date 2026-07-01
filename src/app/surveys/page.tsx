@@ -1,0 +1,3 @@
+import { Topbar, Card } from "@/components/ui";
+import { SurveyBuilder } from "./ui";
+export default function SurveysPage(){return <><Topbar/><main className="shell"><div className="page-title"><div><h1>نظرسنجی، ارزشیابی و رأی‌گیری زمان کلاس</h1><p className="muted">سازنده فرم، پاسخ ناشناس، حداقل تعداد پاسخ برای نمایش نتایج و رأی‌گیری زمان جلسه.</p></div></div><section className="grid grid-2"><Card><h2>ساخت نظرسنجی</h2><SurveyBuilder/></Card><Card><h2>اصول حریم خصوصی</h2><div className="stack"><div className="list-row">جداسازی هویت دانشجو از گزارش نهایی</div><div className="list-row">عدم نمایش نتیجه زیر آستانه پاسخ‌ها</div><div className="list-row">ثبت لاگ برای خروجی و انتشار نتایج</div></div></Card></section></main></>}

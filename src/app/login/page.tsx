@@ -1,0 +1,3 @@
+import { Topbar, Card } from "@/components/ui";
+import { LoginForm } from "./ui";
+export default function LoginPage(){return <><Topbar/><main className="shell"><section className="grid grid-2" style={{marginTop:40}}><Card><h1>ورود به سامانه</h1><p className="muted">با حساب دانشگاهی یا ایمیل و رمز وارد شوید.</p><LoginForm/></Card><Card><h2>حساب‌های نمونه</h2><div className="stack"><div className="list-row">admin@example.edu</div><div className="list-row">rezai@example.edu</div><div className="list-row">headta@example.edu</div><div className="list-row">student@example.edu</div><p className="muted">رمز: Admin@12345678</p></div></Card></section></main></>}

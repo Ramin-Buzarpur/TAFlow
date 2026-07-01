@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ta_management_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ta_admin
+      POSTGRES_PASSWORD: ta_admin_password
+      POSTGRES_DB: ta_management
+    ports:
+      - "5432:5432"
+    volumes:
+      - ta_management_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ta_admin -d ta_management"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  ta_management_pgdata:

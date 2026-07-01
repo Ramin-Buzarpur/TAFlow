@@ -1,0 +1,5 @@
+import { auth } from "@/server/auth/auth";
+import { getThread } from "@/server/services/messaging";
+import { Topbar, Card, EmptyState } from "@/components/ui";
+import { ReplyForm } from "./ui";
+export default async function ThreadPage({ params }: { params: Promise<{ id: string }> }) { const session=await auth(); if(!session?.user?.id) return <><Topbar/><main className="shell"><EmptyState title="ورود لازم است" text="برای مشاهده گفت‌وگو وارد شوید."/></main></>; const { id }=await params; const t=await getThread(session.user.id,id); return <><Topbar/><main className="shell"><div className="page-title"><div><h1>{t.subject}</h1><p className="muted">{t.courseOffering?.course.title || t.type}</p></div></div><Card><div className="stack">{t.messages.map(m=><div className="list-row" key={m.id}><div><strong>{m.sender.name || m.sender.email}</strong><p>{m.body}</p><small className="muted">{new Date(m.createdAt).toLocaleString('fa-IR')}</small></div></div>)}</div><ReplyForm threadId={t.id}/></Card></main></> }

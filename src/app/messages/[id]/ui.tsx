@@ -1,0 +1,3 @@
+"use client";
+import { useState } from "react";
+export function ReplyForm({ threadId }: { threadId: string }) { const [msg,setMsg]=useState(''); async function submit(fd:FormData){ const res=await fetch(`/api/messages/${threadId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:fd.get('body')})}); const j=await res.json(); setMsg(res.ok?'پاسخ ارسال شد.':j.message);} return <form className="form" action={submit} style={{marginTop:20}}><textarea className="textarea" name="body" placeholder="پاسخ..."/><button className="btn btn-primary">ارسال پاسخ</button>{msg?<p className="muted">{msg}</p>:null}</form> }
