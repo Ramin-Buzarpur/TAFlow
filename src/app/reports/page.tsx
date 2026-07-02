@@ -1,3 +1,4 @@
+import { FileCheck2, TrendingUp, MessagesSquare, GraduationCap, ShieldAlert } from "lucide-react";
 import { auth } from "@/server/auth/auth";
 import { getManagementReport } from "@/server/services/reports";
 import { Topbar, Card, EmptyState, Kpi, StatusBadge } from "@/components/ui";
@@ -5,7 +6,7 @@ import { Topbar, Card, EmptyState, Kpi, StatusBadge } from "@/components/ui";
 export default async function ReportsPage() {
   const session = await auth();
   const isAdmin = session?.user?.globalRole === "SYSTEM_ADMIN" || session?.user?.globalRole === "EDUCATION_ADMIN";
-  if (!session?.user?.id || !isAdmin) return <><Topbar/><main className="shell"><EmptyState title="دسترسی غیرمجاز" text="این بخش فقط برای ادمین سیستم و آموزش قابل مشاهده است."/></main></>;
+  if (!session?.user?.id || !isAdmin) return <><Topbar/><main className="shell"><EmptyState icon={ShieldAlert} title="دسترسی غیرمجاز" text="این بخش فقط برای ادمین سیستم و آموزش قابل مشاهده است."/></main></>;
   const report = await getManagementReport(session.user.id);
   const maxApplications = Math.max(1, ...report.topCourses.map((c) => c.applications));
 
@@ -13,10 +14,10 @@ export default async function ReportsPage() {
     <div className="page-title"><div><h1>گزارش‌ها و نمودارها</h1><p className="muted">آمار مدیریتی تجمیعی از درخواست‌ها، ارزشیابی‌ها و پیام‌رسانی.</p></div></div>
 
     <section className="grid grid-4">
-      <Kpi label="کل درخواست‌های TA" value={report.totalApplications}/>
-      <Kpi label="نرخ پذیرش" value={report.acceptanceRate !== null ? `${report.acceptanceRate}%` : "-"} tone="green"/>
-      <Kpi label="کل گفت‌وگوها" value={report.totalThreads} tone="purple"/>
-      <Kpi label="ارزشیابی استاد ثبت‌شده" value={report.professorSatisfaction.count} tone="orange"/>
+      <Kpi icon={FileCheck2} label="کل درخواست‌های TA" value={report.totalApplications}/>
+      <Kpi icon={TrendingUp} label="نرخ پذیرش" value={report.acceptanceRate !== null ? `${report.acceptanceRate}%` : "-"} tone="green"/>
+      <Kpi icon={MessagesSquare} label="کل گفت‌وگوها" value={report.totalThreads} tone="purple"/>
+      <Kpi icon={GraduationCap} label="ارزشیابی استاد ثبت‌شده" value={report.professorSatisfaction.count} tone="orange"/>
     </section>
 
     <section className="grid grid-2" style={{ marginTop: 20 }}>

@@ -1,7 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { StatusBadge, Badge } from "@/components/ui";
+import { useToast } from "@/components/toast";
 
 type Applicant = {
   id: string;
@@ -15,7 +17,8 @@ type Applicant = {
 export function ApplicantBoard({ applications }: { applications: Applicant[] }) {
   const [view, setView] = useState<"card" | "table">("card");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [msg, setMsg] = useState("");
+  const router = useRouter();
+  const toast = useToast();
 
   const filtered = useMemo(() => {
     const list = statusFilter === "ALL" ? applications : applications.filter((a) => a.status === statusFilter);
@@ -23,11 +26,10 @@ export function ApplicantBoard({ applications }: { applications: Applicant[] }) 
   }, [applications, statusFilter]);
 
   async function changeStatus(id: string, status: string) {
-    setMsg("در حال ثبت...");
     const res = await fetch(`/api/ta-applications/${id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     const json = await res.json();
-    setMsg(res.ok ? "وضعیت به‌روزرسانی شد." : json.message || "خطا در ثبت وضعیت");
-    if (res.ok) window.location.reload();
+    if (res.ok) { toast.show("وضعیت به‌روزرسانی شد.", "success"); router.refresh(); }
+    else toast.show(json.message || "خطا در ثبت وضعیت", "error");
   }
 
   return <div>
@@ -46,7 +48,6 @@ export function ApplicantBoard({ applications }: { applications: Applicant[] }) 
         <option value="REJECTED">ردشده</option>
       </select>
     </div>
-    {msg ? <p className="muted" style={{ marginBottom: 12 }}>{msg}</p> : null}
 
     {view === "card" ? <section className="grid grid-3">
       {filtered.map((a) => <div className="card" key={a.id}>

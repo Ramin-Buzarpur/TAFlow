@@ -1,10 +1,13 @@
 import "server-only";
+import ExcelJS from "exceljs";
 import { db } from "@/server/db";
 import { AppError, PermissionError } from "@/server/errors";
 import { coursePermissions, isGlobalAdmin } from "@/server/auth/permissions";
 import { canAccessCourseOffering, requireCoursePermission, getCourseRoleNames } from "@/server/services/rbac";
 import { writeAuditLog } from "@/server/services/audit";
 import { notifyUser } from "@/server/services/notifications";
+
+export type GradeImportRow = { row: number; studentNumber: string; score: number | null; status: "ok" | "error"; message?: string; studentId?: string };
 
 export async function getGradebook(actorId: string, courseOfferingId: string) {
   await requireCoursePermission(actorId, courseOfferingId, coursePermissions.MANAGE_GRADEBOOK);
@@ -66,6 +69,58 @@ export async function upsertGradeRecord(actorId: string, input: { gradeItemId: s
   await db.gradeChangeLog.create({ data: { gradeRecordId: record.id, changedById: actorId, oldScore: previous?.score, newScore: input.score, oldStatus: previous?.status, newStatus: record.status, reason: input.reason } });
   await writeAuditLog({ actorId, action: previous ? "UPDATE" : "CREATE", entityType: "GradeRecord", entityId: record.id, courseOfferingId: item.courseOfferingId, beforeJson: previous, afterJson: record });
   return record;
+}
+
+export async function parseGradeImportFile(actorId: string, gradeItemId: string, buffer: Buffer): Promise<GradeImportRow[]> {
+  const item = await db.gradeItem.findUnique({ where: { id: gradeItemId } });
+  if (!item) throw new AppError("NOT_FOUND", "Grade item not found", 404);
+  await requireCoursePermission(actorId, item.courseOfferingId, coursePermissions.EDIT_ASSIGNED_GRADES);
+
+  const enrollments = await db.courseEnrollment.findMany({
+    where: { courseOfferingId: item.courseOfferingId, droppedAt: null },
+    include: { student: { include: { studentProfile: true } } }
+  });
+  const byStudentNumber = new Map(enrollments.filter((e) => e.student.studentProfile?.studentNumber).map((e) => [e.student.studentProfile!.studentNumber, e.studentId]));
+  const byEmail = new Map(enrollments.map((e) => [e.student.email.toLowerCase(), e.studentId]));
+
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+  } catch {
+    throw new AppError("INVALID_FILE", "Could not read the uploaded file as an Excel workbook", 422);
+  }
+  const sheet = workbook.worksheets[0];
+  if (!sheet) throw new AppError("INVALID_FILE", "No worksheet found in the uploaded file", 422);
+
+  const rows: GradeImportRow[] = [];
+  sheet.eachRow((sheetRow, rowNumber) => {
+    if (rowNumber === 1) return;
+    const identifierRaw = sheetRow.getCell(1).value;
+    const identifier = identifierRaw === null || identifierRaw === undefined ? "" : String(identifierRaw).trim();
+    const scoreCell = sheetRow.getCell(2).value;
+    const scoreRaw = scoreCell === null || scoreCell === undefined ? "" : scoreCell;
+    if (!identifier && scoreRaw === "") return;
+
+    const studentId = byStudentNumber.get(identifier) ?? byEmail.get(identifier.toLowerCase());
+    if (!studentId) { rows.push({ row: rowNumber, studentNumber: identifier, score: null, status: "error", message: "دانشجو در این درس ثبت‌نام نکرده یا شماره دانشجویی/ایمیل نادرست است" }); return; }
+
+    const score = typeof scoreRaw === "number" ? scoreRaw : Number(scoreRaw);
+    if (scoreRaw === "" || Number.isNaN(score)) { rows.push({ row: rowNumber, studentNumber: identifier, score: null, status: "error", message: "نمره نامعتبر است", studentId }); return; }
+    if (score < 0 || score > Number(item.maxScore)) { rows.push({ row: rowNumber, studentNumber: identifier, score, status: "error", message: `نمره باید بین ۰ و ${item.maxScore} باشد`, studentId }); return; }
+
+    rows.push({ row: rowNumber, studentNumber: identifier, score, status: "ok", studentId });
+  });
+
+  return rows;
+}
+
+export async function commitGradeImport(actorId: string, gradeItemId: string, rows: { studentId: string; score: number }[]) {
+  const results = [];
+  for (const r of rows) {
+    results.push(await upsertGradeRecord(actorId, { gradeItemId, studentId: r.studentId, score: r.score, reason: "Excel import" }));
+  }
+  await writeAuditLog({ actorId, action: "IMPORT", entityType: "GradeItem", entityId: gradeItemId, metadata: { rows: results.length, format: "XLSX" } });
+  return results;
 }
 
 export async function publishGradeItem(actorId: string, gradeItemId: string) {

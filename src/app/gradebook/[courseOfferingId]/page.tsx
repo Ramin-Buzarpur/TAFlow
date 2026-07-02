@@ -2,5 +2,23 @@ import Link from "next/link";
 import { auth } from "@/server/auth/auth";
 import { getGradebook } from "@/server/services/gradebook";
 import { Topbar, Card, EmptyState, StatusBadge } from "@/components/ui";
-import { GradebookForms } from "./ui";
-export default async function GradebookPage({params}:{params:Promise<{courseOfferingId:string}>}){const session=await auth(); if(!session?.user?.id) return <><Topbar/><main className="shell"><EmptyState title="ورود لازم است" text="برای دفتر نمرات وارد شوید."/></main></>; const {courseOfferingId}=await params; const cats=await getGradebook(session.user.id,courseOfferingId); return <><Topbar/><main className="shell"><div className="page-title"><div><h1>دفتر نمرات</h1><p className="muted">ورود نمره، انتشار، تاریخچه تغییرات و خروجی CSV.</p></div><div style={{display:'flex',gap:10}}><Link className="btn" href={`/api/exports/roster/${courseOfferingId}`}>خروجی اعضای کلاس</Link><Link className="btn btn-primary" href={`/api/exports/gradebook/${courseOfferingId}`}>خروجی نمرات</Link></div></div><section className="grid grid-2"><Card><table className="table"><thead><tr><th>دسته</th><th>وزن</th><th>آیتم‌ها</th></tr></thead><tbody>{cats.map(c=><tr key={c.id}><td>{c.name}</td><td>{String(c.weight)}٪</td><td>{c.items.map(i=><div className="list-row" key={i.id}><span>{i.title}</span><StatusBadge status={i.visibility}/></div>)}</td></tr>)}</tbody></table></Card><Card><h2>مدیریت سریع</h2><GradebookForms courseOfferingId={courseOfferingId}/></Card></section></main></>}
+import { GradebookForms, GradeImportPanel } from "./ui";
+
+export default async function GradebookPage({ params }: { params: Promise<{ courseOfferingId: string }> }) {
+  const session = await auth();
+  if (!session?.user?.id) return <><Topbar/><main className="shell"><EmptyState title="ورود لازم است" text="برای دفتر نمرات وارد شوید."/></main></>;
+  const { courseOfferingId } = await params;
+  const cats = await getGradebook(session.user.id, courseOfferingId);
+  const items = cats.flatMap((c) => c.items.map((i) => ({ id: i.id, title: `${c.name} — ${i.title}` })));
+
+  return <><Topbar/><main className="shell">
+    <div className="page-title"><div><h1>دفتر نمرات</h1><p className="muted">ورود نمره، انتشار، تاریخچه تغییرات و خروجی CSV.</p></div><div style={{ display: "flex", gap: 10 }}><Link className="btn" href={`/api/exports/roster/${courseOfferingId}`}>خروجی اعضای کلاس</Link><Link className="btn btn-primary" href={`/api/exports/gradebook/${courseOfferingId}`}>خروجی نمرات</Link></div></div>
+    <section className="grid grid-2">
+      <Card><table className="table"><thead><tr><th>دسته</th><th>وزن</th><th>آیتم‌ها</th></tr></thead><tbody>{cats.map((c) => <tr key={c.id}><td>{c.name}</td><td>{String(c.weight)}٪</td><td>{c.items.map((i) => <div className="list-row" key={i.id}><span>{i.title}</span><StatusBadge status={i.visibility}/></div>)}</td></tr>)}</tbody></table></Card>
+      <Card><h2>مدیریت سریع</h2><GradebookForms courseOfferingId={courseOfferingId}/></Card>
+    </section>
+    <section className="grid grid-2" style={{ marginTop: 20 }}>
+      <Card><h2>ورود گروهی نمره از اکسل</h2><GradeImportPanel items={items}/></Card>
+    </section>
+  </main></>;
+}

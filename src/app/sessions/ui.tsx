@@ -1,14 +1,16 @@
 "use client";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { JalaliHint } from "@/components/jalali-hint";
+import { useToast } from "@/components/toast";
+
 export function NewSessionForm({ offerings, currentUserId }: { offerings: { id: string; title: string }[]; currentUserId: string }) {
-  const [msg, setMsg] = useState("");
+  const router = useRouter();
+  const toast = useToast();
   async function submit(fd: FormData) {
-    setMsg("در حال ثبت...");
     const res = await fetch("/api/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ courseOfferingId: fd.get("courseOfferingId"), hostId: fd.get("hostId"), title: fd.get("title"), description: fd.get("description") || undefined, startsAt: fd.get("startsAt"), endsAt: fd.get("endsAt"), meetingUrl: fd.get("meetingUrl") || undefined, location: fd.get("location") || undefined, capacity: Number(fd.get("capacity") || 0) || undefined }) });
     const j = await res.json();
-    setMsg(res.ok ? "جلسه ساخته شد." : j.message || "خطا در ثبت جلسه");
-    if (res.ok) window.location.reload();
+    if (res.ok) { toast.show("جلسه ساخته شد.", "success"); router.refresh(); }
+    else toast.show(j.message || "خطا در ثبت جلسه", "error");
   }
   return <form className="form" action={submit}>
     <select className="select" name="courseOfferingId" required>{offerings.length ? offerings.map((o) => <option key={o.id} value={o.id}>{o.title}</option>) : <option value="">درسی در دسترس نیست</option>}</select>
@@ -21,19 +23,17 @@ export function NewSessionForm({ offerings, currentUserId }: { offerings: { id: 
     <input className="input" name="location" placeholder="مکان حضوری"/>
     <input className="input" name="capacity" placeholder="ظرفیت"/>
     <button className="btn btn-primary">ثبت جلسه</button>
-    {msg ? <p className="muted">{msg}</p> : null}
   </form>;
 }
 
 export function RegisterButton({ sessionId }: { sessionId: string }) {
-  const [msg, setMsg] = useState("");
+  const router = useRouter();
+  const toast = useToast();
   async function register() {
     const res = await fetch(`/api/sessions/${sessionId}/register`, { method: "POST" });
     const j = await res.json();
-    setMsg(res.ok ? "ثبت‌نام شد." : j.message || "خطا در ثبت‌نام");
+    if (res.ok) { toast.show("ثبت‌نام شد.", "success"); router.refresh(); }
+    else toast.show(j.message || "خطا در ثبت‌نام", "error");
   }
-  return <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-    <button className="btn" onClick={register}>ثبت‌نام</button>
-    {msg ? <span className="muted" style={{ fontSize: 12 }}>{msg}</span> : null}
-  </span>;
+  return <button className="btn" onClick={register}>ثبت‌نام</button>;
 }

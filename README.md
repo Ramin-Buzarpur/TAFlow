@@ -42,6 +42,7 @@ http://localhost:8025        Mailpit inbox (see "sent" emails here)
 - **Want to wipe the DB and start fresh?** `docker compose down -v && docker compose up -d && pnpm db:migrate --name init && pnpm db:seed` — the `-v` flag also nukes the volume, so the data's really gone.
 - **Docker Desktop won't start on Windows** — check that the `com.docker.service` service is actually running (needs admin rights). Open the Docker Desktop app and wait for "Engine running" before doing anything else.
 - **First `pnpm install` takes forever** — yeah, that's normal, it's compiling native stuff like `argon2` and `sharp` plus downloading Prisma's engines. It's way faster after that since pnpm caches everything locally.
+- **A page feels stuck or "doesn't load" the first time you open it in dev** — this isn't a bug, it's Turbopack compiling that route on the fly the first time you hit it. With this many routes and some heavy server-only dependencies (pdf-lib, exceljs, the AWS SDK), that first compile can genuinely take 10-30 seconds. Every visit after that is instant. If you're demoing the app or just want it snappy the whole time, run `pnpm build && pnpm start` instead of `pnpm dev` — production mode has no on-demand compiling at all.
 
 ## Test accounts
 
@@ -129,6 +130,7 @@ Every permission check reads from the active `CourseRoleAssignment`, never from 
 - Students only ever see their own grades
 - Class roster export as CSV (with proper BOM so Persian text doesn't break in Excel)
 - Gradebook export as CSV too
+- Bulk grade import from an `.xlsx` file (student number or email + score), with a preview step that flags bad rows (unenrolled student, invalid or out-of-range score) before anything gets written
 - Every entry, publish, and export gets logged
 
 ### 7. Surveys and time polls
@@ -260,6 +262,10 @@ Went for something that feels like a modern school/enterprise dashboard, nothing
 - Bento/grid layout for dashboards
 - Kept animations light on purpose — no heavy motion on pages where you're staring at tables all day
 - Clear status colors: blue, green, red, orange, purple, gray
+- Self-hosted Vazirmatn as the site-wide font (it used to only show up inside the certificate PDF — now the whole UI uses it instead of falling back to whatever the OS ships)
+- `lucide-react` icons on nav links, KPI cards, and empty states instead of plain text/emoji
+- An actual mobile nav menu (before, the nav links just vanished under 1000px with nothing replacing them — now there's a hamburger button that opens a proper dropdown)
+- Toasts instead of full-page reloads after form submits — forms now use `router.refresh()` to update data in place, so day-to-day usage feels a lot snappier than before
 
 ## Security stuff
 
@@ -315,7 +321,7 @@ One thing worth knowing: the suite runs on a single Playwright worker on purpose
 
 ## What's not done yet (and why)
 
-- **Full rubric grading / Excel import with row-by-row error previews** — CSV export and the `exceljs` dependency are already there, but a proper import UI with inline error feedback needs its own page and a custom parser. Didn't get to it.
+- **Full rubric grading** — grades are still single-score per item, not a weighted-criteria rubric. Bulk Excel import (with a row-by-row error preview) is done though — see the gradebook page.
 - **Recurring sessions and a real Google Calendar sync** — you get an `.ics` file, but two-way sync with the actual Calendar API needs its own OAuth consent screen and API keys, which is a bigger separate setup.
 - **A smarter talent pool / recommendation engine** — right now it's a simple filter-and-score system (`scoring.ts`). Anything learning-based would need way more historical data and its own model.
 - **Timesheets, workload balancing, conflict detection** — just outside scope for now, would need new data models and UI.
@@ -327,7 +333,7 @@ One thing worth knowing: the suite runs on a single Playwright worker on purpose
 ## What's next
 
 1. Hook up real university SSO (a production Keycloak realm)
-2. Excel import with error previews, recurring sessions, real Google Calendar sync
+2. Full rubric grading, recurring sessions, real Google Calendar sync
 3. Recommendation engine, timesheets, workload analytics
 4. Virus scanning, full CI/CD, a production Dockerfile, documented backup/restore
 5. Actually deploy it somewhere (VPS or cloud)
