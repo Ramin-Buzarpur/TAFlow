@@ -25,7 +25,7 @@ function sanitizeFileName(name: string) {
 }
 
 export async function uploadFile(actorId: string, input: { buffer: Buffer; originalName: string; mimeType: string; visibility?: FileVisibility }) {
-  const limiter = checkRateLimit(makeRateLimitKey("upload-file", actorId), 30, 60 * 60 * 1000);
+  const limiter = await checkRateLimit(makeRateLimitKey("upload-file", actorId), 30, 60 * 60 * 1000);
   if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many file uploads", 429);
   validateUpload({ mimeType: input.mimeType, sizeBytes: input.buffer.byteLength });
   const storageKey = `${actorId}/${randomUUID()}-${sanitizeFileName(input.originalName)}`;

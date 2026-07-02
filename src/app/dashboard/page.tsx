@@ -17,7 +17,7 @@ export default async function DashboardPage() {
   return <><Topbar/><CommandPalette/><main className="shell">
     <div className="page-title"><div><h1>داشبورد نقش‌محور</h1><p className="muted">خلاصه عملیات مهم، درخواست‌ها، جلسات و پیام‌های مرتبط با نقش شما.</p></div><Link className="btn btn-primary" href="/opportunities">فرصت‌های TA</Link></div>
 
-    <section className="grid grid-4"><Kpi label="درس‌های فعال من" value={data.counters.activeCourses}/><Kpi label="درخواست‌های من" value={data.counters.applications} tone="purple"/><Kpi label="جلسات پیش‌رو" value={data.counters.upcomingSessions} tone="orange"/><Kpi label="اعلان خوانده‌نشده" value={data.counters.unreadNotifications} tone="green"/></section>
+    <section className="grid grid-5"><Kpi label="درس‌های فعال من" value={data.counters.activeCourses}/><Kpi label="درخواست‌های من" value={data.counters.applications} tone="purple"/><Kpi label="جلسات پیش‌رو" value={data.counters.upcomingSessions} tone="orange"/><Kpi label="اعلان خوانده‌نشده" value={data.counters.unreadNotifications} tone="green"/><Kpi label="پیام خوانده‌نشده" value={data.counters.unreadMessages} tone="purple"/></section>
 
     {professor ? <><h2 style={{ marginTop: 30 }}>داشبورد استاد</h2>
       <section className="grid grid-4"><Kpi label="درس‌های فعال" value={professor.counters.activeCourses}/><Kpi label="درخواست‌های در انتظار" value={professor.counters.pendingApplications} tone="orange"/><Kpi label="پیام‌های باز" value={professor.counters.unansweredThreads} tone="purple"/><Kpi label="نظرسنجی فعال" value={professor.counters.activeSurveys} tone="green"/></section>

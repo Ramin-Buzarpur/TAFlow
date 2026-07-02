@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { AppError } from "@/server/errors";
+import { ok, fail } from "@/server/utils/api";
 import { requireUser } from "@/server/auth/session";
 import { getCoursePermissions } from "@/server/services/rbac";
 import { getCourseOfferingIdentity } from "@/server/services/course-roles";
@@ -12,16 +11,6 @@ export async function GET(_request: Request, context: { params: Promise<{ course
       getCourseOfferingIdentity(courseOfferingId),
       getCoursePermissions(user.id, courseOfferingId)
     ]);
-    return NextResponse.json({
-      data: {
-        offering,
-        permissions: Array.from(permissions)
-      }
-    });
-  } catch (error) {
-    if (error instanceof AppError) {
-      return NextResponse.json({ error: error.code, message: error.message, details: error.details }, { status: error.status });
-    }
-    return NextResponse.json({ error: "INTERNAL_ERROR", message: "Unexpected course context error" }, { status: 500 });
-  }
+    return ok({ offering, permissions: Array.from(permissions) });
+  } catch (e) { return fail(e, "Unexpected course context error"); }
 }

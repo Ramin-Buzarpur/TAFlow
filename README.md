@@ -8,21 +8,21 @@
 - PostgreSQL + Prisma ORM
 - Auth.js / NextAuth + Prisma Adapter
 - Zod برای اعتبارسنجی سمت سرور
-- Argon2id، TOTP 2FA، rate limiting و AuditLog
+- Argon2id، TOTP 2FA، rate limiting مبتنی بر Redis (با fallback به in-memory) و AuditLog
 - CSS design system داخلی با RTL کامل
-- Vitest برای تست‌های واحد
-- Docker Compose برای Postgres، MinIO (S3-compatible storage) و Mailpit (SMTP محلی)
+- Vitest برای تست‌های واحد، Playwright برای e2e
+- Docker Compose برای Postgres، MinIO (S3-compatible storage)، Mailpit (SMTP محلی) و Redis (rate limiting)
 
 ## اجرای محلی
 
 ```bash
 cp .env.example .env
 docker compose up -d
-npm install
-npm run db:generate
-npm run db:migrate -- --name init
-npm run db:seed
-npm run dev
+pnpm install
+pnpm db:generate
+pnpm db:migrate --name init
+pnpm db:seed
+pnpm dev
 ```
 
 سپس:
@@ -32,6 +32,16 @@ http://localhost:3000        سامانه
 http://localhost:9001        کنسول MinIO (فایل‌های آپلودشده)
 http://localhost:8025        صندوق ایمیل Mailpit
 ```
+
+## رفع اشکال نصب و اجرا
+
+- **خطای `datasource property url is no longer supported`:** یعنی `prisma`/`@prisma/client` روی نسخه ۷ نصب شده‌اند. پروژه باید دقیقاً روی `6.19.3` pin بماند (طبق `package.json`). با `pnpm install` دوباره نصب کنید؛ اگر باز هم مشکل بود `rm -rf node_modules pnpm-lock.yaml && pnpm install`.
+- **خطای `Ignored build scripts` بعد از `pnpm install`:** به‌خاطر سیاست امنیتی pnpm است. یک‌بار `pnpm approve-builds --all` را اجرا کنید تا اسکریپت‌های نصب Prisma/argon2/sharp اجرا شوند.
+- **خطای TypeScript از نوع `Module "@prisma/client" has no exported member ...`:** یعنی Prisma Client هنوز generate نشده یا نسخه‌ی node_modules stale است. `pnpm exec prisma generate` را اجرا کنید.
+- **تداخل پورت PostgreSQL/MinIO/Mailpit/Redis (5432, 9000-9001, 1025, 8025, 6379):** اگر سرویس دیگری از قبل روی این پورت‌ها اجرا می‌شود، `docker-compose.yml` را برای آن سرویس با پورت دیگری map کنید یا سرویس تداخل‌دار را متوقف کنید.
+- **ریست کامل دیتابیس و seed دوباره:** `docker compose down -v && docker compose up -d && pnpm db:migrate --name init && pnpm db:seed` (فلگ `-v` volume دیتابیس را هم پاک می‌کند).
+- **Docker Desktop روی ویندوز اجرا نمی‌شود:** مطمئن شوید سرویس `com.docker.service` در حال اجراست (نیاز به دسترسی Administrator دارد)؛ از طریق GUI برنامه Docker Desktop را باز و منتظر پیام «Engine running» بمانید.
+- **کند بودن اولین اجرای `pnpm install`:** طبیعی است چون پکیج‌های native مثل `argon2`، `sharp` و Prisma engines کامپایل/دانلود می‌شوند؛ اجراهای بعدی از cache محلی pnpm سریع‌تر خواهند بود.
 
 ## حساب‌های seed
 
@@ -247,17 +257,21 @@ POST /api/notifications/:id/read
 - کنترل دسترسی در service layer، نه فقط UI
 - عدم افشای notes داخلی استاد به دانشجو
 - لاگ امنیتی و AuditLog
-- rate limiting برای مسیرهای حساس Auth
+- rate limiting مبتنی بر Redis برای مسیرهای حساس (auth، آپلود فایل، پیام، درخواست TA)، با fallback به in-memory
 - رمزنگاری secret دو مرحله‌ای
 - عدم اعتماد به نقش‌های کلاینت
 - خروجی‌های حساس در AuditLog ثبت می‌شوند
+- Security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Content-Security-Policy`) روی همه پاسخ‌ها (`next.config.mjs`)
+- اعتبارسنجی envهای حیاتی هنگام startup با Zod (`src/env.ts`)
+- partial unique index سطح دیتابیس برای جلوگیری از نقش فعال تکراری، بدون از بین رفتن تاریخچه assign/revoke
+- unique constraint سطح دیتابیس برای جلوگیری از پاسخ تکراری نظرسنجی و ارزشیابی (backstop روی چک app-level موجود)
 
 ## تست
 
 ### تست‌های واحد
 
 ```bash
-npm test
+pnpm test
 ```
 
 تست‌ها شامل موارد زیر هستند:
@@ -274,10 +288,10 @@ npm test
 
 ```bash
 npx playwright install   # فقط بار اول، دانلود مرورگر
-npm run test:e2e
+pnpm test:e2e
 ```
 
-نیازمند دیتابیس seed‌شده و در حال اجرا (`docker compose up -d` و `npm run db:seed`) است؛ خود دستور `npm run test:e2e` سرور dev را در صورت نیاز بالا می‌آورد. یک‌بار پیش از تست‌ها با هر ۴ حساب seed لاگین شده و session ذخیره می‌شود (`tests/e2e/global-setup.ts`) تا rate limit ورود به دلیل اجرای مکرر تست‌ها فعال نشود. مسیرهای پوشش داده‌شده: ورود/خروج هر ۴ نقش، گردش‌کار کامل ایجاد فرصت → درخواست → پذیرش، دسترسی ویژه Head TA، پیام‌رسانی، ارزشیابی استاد و نظرسنجی TA، اطلاعیه‌ها و پنل ادمین، داشبوردهای نقش‌محور، دسترسی‌های ممنوع، RTL/ریسپانسیو و دارک‌مود.
+نیازمند دیتابیس seed‌شده و در حال اجرا (`docker compose up -d` و `pnpm db:seed`) است؛ خود دستور `pnpm test:e2e` سرور dev را در صورت نیاز بالا می‌آورد. یک‌بار پیش از تست‌ها با هر ۴ حساب seed لاگین شده و session ذخیره می‌شود (`tests/e2e/global-setup.ts`) تا rate limit ورود به دلیل اجرای مکرر تست‌ها فعال نشود. مسیرهای پوشش داده‌شده: ورود/خروج هر ۴ نقش، گردش‌کار کامل ایجاد فرصت → درخواست → پذیرش، دسترسی ویژه Head TA، پیام‌رسانی، ارزشیابی استاد و نظرسنجی TA، اطلاعیه‌ها و پنل ادمین، داشبوردهای نقش‌محور، دسترسی‌های ممنوع، RTL/ریسپانسیو و دارک‌مود.
 
 ## آپلود فایل، ایمیل و گواهی PDF
 
@@ -286,15 +300,21 @@ npm run test:e2e
 - گواهی فعالیت به‌صورت PDF واقعی فارسی/RTL تولید و در storage ذخیره می‌شود (`src/server/certificates/pdf.ts`، فونت Vazirmatn).
 - موتور امتیازدهی و رتبه‌بندی متقاضیان بر اساس نمره بررسی، مصاحبه و معدل (`src/server/services/scoring.ts`).
 
-## محدودیت‌های فعلی
+## محدودیت‌های فعلی (آگاهانه به بعد موکول شده، با دلیل)
 
-- برخی فرم‌های UI برای سرعت توسعه ساده نگه داشته شده‌اند و در فاز بعدی frontend کامل می‌شوند.
-- import XLSX واقعی در سرویس gradebook قابل توسعه است؛ خروجی CSV آماده است و `exceljs` در dependencyها وجود دارد.
+- **Rubric grading کامل / import Excel با preview خطا:** خروجی CSV و `exceljs` به‌عنوان dependency آماده است؛ UI کامل import با نمایش خطای سطر-به-سطر نیاز به یک صفحه‌ی جدید و parser سفارشی دارد که در scope این تحویل نبود.
+- **جلسات تکرارشونده (Recurring sessions) و اتصال واقعی Google Calendar API:** فایل `.ics` تولید می‌شود ولی sync دوطرفه با Calendar API نیازمند OAuth consent screen جداگانه و کلید API خارجی است.
+- **Talent Pool پیشرفته (لیست علاقه‌مندی) و Recommendation Engine هوشمند:** نسخه‌ی فعلی بر پایه‌ی فیلتر و امتیاز ساده (`scoring.ts`) کار می‌کند؛ رتبه‌بندی یادگیری‌محور نیاز به داده‌ی تاریخی بیشتر و مدل جداگانه دارد.
+- **Timesheet + Workload balancing + Conflict detection:** خارج از scope این تحویل؛ نیاز به مدل داده و UI جدید دارد.
+- **Virus scanning فایل‌های آپلودی:** نیازمند سرویس خارجی (مثل ClamAV) که در محیط dev فعلی راه‌اندازی نشده.
+- **SSO دانشگاهی (Keycloak) کامل:** flag و ساختار پایه در auth.ts وجود دارد؛ اتصال کامل به IdP واقعی نیازمند سرور Keycloak و realm واقعی است.
+- **CI/CD کامل (GitHub Actions)، OpenAPI/Swagger کامل، ERD گرافیکی، Dockerfile production + backup/restore کامل:** مستندسازی حداقلی/متنی انجام شده (`docs/erd.md`, `docs/api.md`)؛ نسخه‌ی production-grade این‌ها در scope این تحویل نبود.
 - بازتولید bidi/reshaping فارسی برای متن ترکیبی فارسی-لاتین در PDF گواهی (مثل کد نقش انگلیسی داخل جمله فارسی) هنوز کامل نیست؛ متن خالص فارسی درست رندر می‌شود.
 
 ## مسیر توسعه بعدی
 
-1. تکمیل صفحات فرانت‌اند باقی‌مانده (پنل بررسی متقاضیان، مقایسه، داشبورد استاد/Head TA/ادمین، بانک استعدادها، مدیریت وظایف، تنظیمات، صفحات خطا)
-2. اتصال SSO دانشگاهی
-3. نوشتن تست‌های e2e با Playwright
-4. deploy روی VPS یا سرویس‌های ابری
+1. اتصال SSO دانشگاهی واقعی (Keycloak realm production)
+2. Excel import با preview خطا، جلسات تکرارشونده، Google Calendar API واقعی
+3. Recommendation Engine و Timesheet/Workload analytics
+4. Virus scanning فایل، CI/CD کامل، Dockerfile production و backup/restore مستند
+5. deploy روی VPS یا سرویس‌های ابری

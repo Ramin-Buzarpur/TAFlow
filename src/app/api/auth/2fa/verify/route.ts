@@ -10,7 +10,7 @@ const schema = z.object({ methodId: z.string().min(10).max(40), code: z.string()
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    const limiter = checkRateLimit(makeRateLimitKey("2fa-verify", user.id), 8, 15 * 60 * 1000);
+    const limiter = await checkRateLimit(makeRateLimitKey("2fa-verify", user.id), 8, 15 * 60 * 1000);
     if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many 2FA verification attempts", 429);
     const input = schema.parse(await request.json());
     const result = await verifyAndEnableTwoFactor(user.id, input.methodId, input.code);

@@ -1,8 +1,7 @@
-import { NextResponse } from "next/server";
-import { markEmailVerified } from "@/server/services/users";
-import { AppError } from "@/server/errors";
-import { emailSchema } from "@/server/validation/common";
 import { z } from "zod";
+import { ok, fail } from "@/server/utils/api";
+import { markEmailVerified } from "@/server/services/users";
+import { emailSchema } from "@/server/validation/common";
 
 const verifySchema = z.object({
   email: emailSchema,
@@ -13,11 +12,6 @@ export async function POST(request: Request) {
   try {
     const input = verifySchema.parse(await request.json());
     await markEmailVerified(input.email, input.token);
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    if (error instanceof AppError) {
-      return NextResponse.json({ error: error.code, message: error.message, details: error.details }, { status: error.status });
-    }
-    return NextResponse.json({ error: "INVALID_REQUEST", message: "Invalid verification request" }, { status: 400 });
-  }
+    return ok({ ok: true });
+  } catch (e) { return fail(e, "Invalid verification request"); }
 }

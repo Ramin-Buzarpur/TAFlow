@@ -252,7 +252,7 @@ model User {
   globalRole            GlobalRole              @default(STUDENT)
   status                UserStatus              @default(PENDING_EMAIL)
   locale                String                  @default("fa-IR")
-  timezone              String                  @default("Asia/Baku")
+  timezone              String                  @default("Asia/Tehran")
   lastLoginAt           DateTime?
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
@@ -275,17 +275,22 @@ model User {
   resumeItems           ResumeItem[]
   createdOfficeHours    OfficeHourSession[]      @relation("OfficeHourCreator")
   hostedOfficeHours     OfficeHourSession[]      @relation("OfficeHourHost")
+  officeHourRegistrations OfficeHourRegistration[] @relation("OfficeHourRegistrant")
   rosterExports         ClassRosterExport[]
   gradeCategories       GradeCategory[]          @relation("GradeCategoryCreator")
   gradeItems            GradeItem[]              @relation("GradeItemCreator")
+  assignedGradeItems    GradeItem[]              @relation("GradeItemAssignee")
   gradeRecords          GradeRecord[]            @relation("StudentGradeRecords")
   editedGradeRecords    GradeRecord[]            @relation("GradeRecordEditor")
   gradeChangeLogs       GradeChangeLog[]         @relation("GradeChangedBy")
+  regradeRequests       RegradeRequest[]         @relation("RegradeRequester")
+  regradeResponses      RegradeRequest[]         @relation("RegradeResponder")
   gradeImportBatches    GradeImportBatch[]
   exportJobs            ExportJob[]
   certificateRequests   CertificateRequest[]     @relation("CertificateRequester")
   professorApprovals    CertificateRequest[]     @relation("CertificateProfessorApprover")
   educationApprovals    CertificateRequest[]     @relation("CertificateEducationApprover")
+  certificateRevocations TACertificate[]         @relation("CertificateRevokedBy")
   createdPolls          AvailabilityPoll[]       @relation("PollCreator")
   pollVotes             PollVote[]
   createdThreads        MessageThread[]          @relation("ThreadCreator")
@@ -496,7 +501,10 @@ model CourseRoleAssignment {
   assignedBy          User?           @relation("CourseRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
   revokedBy           User?           @relation("CourseRoleRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
 
-  @@unique([courseOfferingId, userId, role])
+  // No @@unique here on purpose: a course/user/role triple must be allowed to
+  // repeat over time (assign -> revoke -> reassign) without losing history.
+  // A partial unique index enforcing "only one active row" is added via raw
+  // SQL in the integrity-constraints migration instead.
   @@index([courseOfferingId, role, revokedAt])
   @@index([userId, revokedAt])
   @@index([assignedById])
@@ -638,9 +646,23 @@ model OfficeHourSession {
   courseOffering   CourseOffering    @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   createdBy        User              @relation("OfficeHourCreator", fields: [createdById], references: [id], onDelete: Restrict)
   host             User              @relation("OfficeHourHost", fields: [hostId], references: [id], onDelete: Restrict)
+  registrations    OfficeHourRegistration[]
 
   @@index([courseOfferingId, startsAt])
   @@index([hostId, startsAt])
+}
+
+model OfficeHourRegistration {
+  id            String             @id @default(cuid())
+  sessionId     String
+  studentId     String
+  registeredAt  DateTime           @default(now())
+  attendedAt    DateTime?
+  session       OfficeHourSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student       User               @relation("OfficeHourRegistrant", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
 }
 
 model ClassRosterExport {
@@ -685,6 +707,7 @@ model GradeItem {
   courseOfferingId String
   categoryId       String
   createdById      String
+  assigneeId       String?
   title            String
   maxScore         Decimal          @db.Decimal(6, 2)
   dueAt            DateTime?
@@ -695,10 +718,12 @@ model GradeItem {
   courseOffering   CourseOffering   @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   category         GradeCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   createdBy        User             @relation("GradeItemCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  assignee         User?            @relation("GradeItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   records          GradeRecord[]
 
   @@unique([courseOfferingId, title])
   @@index([categoryId])
+  @@index([assigneeId])
 }
 
 model GradeRecord {
@@ -716,8 +741,28 @@ model GradeRecord {
   student       User               @relation("StudentGradeRecords", fields: [studentId], references: [id], onDelete: Cascade)
   editedBy      User               @relation("GradeRecordEditor", fields: [editedById], references: [id], onDelete: Restrict)
   changeLogs    GradeChangeLog[]
+  regradeRequests RegradeRequest[]
 
   @@unique([gradeItemId, studentId])
+  @@index([studentId, status])
+}
+
+model RegradeRequest {
+  id            String             @id @default(cuid())
+  gradeRecordId String
+  studentId     String
+  reason        String             @db.Text
+  status        String             @default("OPEN")
+  response      String?            @db.Text
+  respondedById String?
+  resolvedAt    DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  gradeRecord   GradeRecord        @relation(fields: [gradeRecordId], references: [id], onDelete: Cascade)
+  student       User               @relation("RegradeRequester", fields: [studentId], references: [id], onDelete: Cascade)
+  respondedBy   User?              @relation("RegradeResponder", fields: [respondedById], references: [id], onDelete: SetNull)
+
+  @@index([gradeRecordId])
   @@index([studentId, status])
 }
 
@@ -822,9 +867,12 @@ model TACertificate {
   pdfFileId              String?             @unique
   issuedAt               DateTime            @default(now())
   revokedAt              DateTime?
+  revokedById            String?
+  revokeReason           String?             @db.Text
   request                CertificateRequest  @relation(fields: [certificateRequestId], references: [id], onDelete: Cascade)
   template               CertificateTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   pdfFile                UploadedFile?       @relation("CertificatePdfFile", fields: [pdfFileId], references: [id], onDelete: SetNull)
+  revokedBy              User?               @relation("CertificateRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
 }
 
 model AvailabilityPoll {
@@ -967,6 +1015,7 @@ model SurveyAnswer {
   question       SurveyQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
   respondent     User?           @relation(fields: [respondentId], references: [id], onDelete: SetNull)
 
+  @@unique([surveyId, questionId, respondentHash])
   @@index([surveyId, respondentHash])
   @@index([questionId])
 }
@@ -984,6 +1033,7 @@ model ProfessorEvaluation {
   courseOffering   CourseOffering  @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   student          User?           @relation("ProfessorEvaluationStudent", fields: [studentId], references: [id], onDelete: SetNull)
 
+  @@unique([courseOfferingId, respondentHash])
   @@index([courseOfferingId])
 }
 
@@ -1002,6 +1052,7 @@ model TAEvaluation {
   courseOffering     CourseOffering  @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   student            User?           @relation("TAEvaluationStudent", fields: [studentId], references: [id], onDelete: SetNull)
 
+  @@unique([courseOfferingId, taUserId, respondentHash])
   @@index([courseOfferingId, taUserId])
 }
 

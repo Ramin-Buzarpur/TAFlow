@@ -42,6 +42,42 @@ export async function getJoinableSession(actorId: string, id: string) {
   return session;
 }
 
+export async function registerForSession(actorId: string, sessionId: string) {
+  const session = await db.officeHourSession.findUnique({ where: { id: sessionId }, include: { _count: { select: { registrations: true } } } });
+  if (!session) throw new AppError("NOT_FOUND", "Session not found", 404);
+  if (!(await canAccessCourseOffering(actorId, session.courseOfferingId))) throw new PermissionError();
+  if (session.status === "CANCELLED") throw new AppError("SESSION_CANCELLED", "Session is cancelled", 409);
+  if (session.capacity && session._count.registrations >= session.capacity) throw new AppError("SESSION_FULL", "This session has reached its capacity", 409);
+  const registration = await db.officeHourRegistration.upsert({
+    where: { sessionId_studentId: { sessionId, studentId: actorId } },
+    update: {},
+    create: { sessionId, studentId: actorId }
+  });
+  await notifyUser({ userId: session.hostId, type: "OFFICE_HOUR", title: "ثبت‌نام جدید در جلسه", body: session.title, href: `/sessions` });
+  return registration;
+}
+
+export async function cancelRegistration(actorId: string, sessionId: string) {
+  const registration = await db.officeHourRegistration.findUnique({ where: { sessionId_studentId: { sessionId, studentId: actorId } } });
+  if (!registration) throw new AppError("NOT_FOUND", "Registration not found", 404);
+  await db.officeHourRegistration.delete({ where: { id: registration.id } });
+  return { ok: true };
+}
+
+export async function listRegistrations(actorId: string, sessionId: string) {
+  const session = await db.officeHourSession.findUnique({ where: { id: sessionId } });
+  if (!session) throw new AppError("NOT_FOUND", "Session not found", 404);
+  await requireCoursePermission(actorId, session.courseOfferingId, coursePermissions.MANAGE_OFFICE_HOUR);
+  return db.officeHourRegistration.findMany({ where: { sessionId }, include: { student: { select: { id: true, name: true, email: true } } }, orderBy: { registeredAt: "asc" } });
+}
+
+export async function markAttendance(actorId: string, registrationId: string, attended: boolean) {
+  const registration = await db.officeHourRegistration.findUnique({ where: { id: registrationId }, include: { session: true } });
+  if (!registration) throw new AppError("NOT_FOUND", "Registration not found", 404);
+  await requireCoursePermission(actorId, registration.session.courseOfferingId, coursePermissions.MANAGE_OFFICE_HOUR);
+  return db.officeHourRegistration.update({ where: { id: registrationId }, data: { attendedAt: attended ? new Date() : null } });
+}
+
 export function buildIcs(session: { title: string; description?: string | null; startsAt: Date; endsAt: Date; meetingUrl?: string | null; location?: string | null }) {
   const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
   const esc = (s?: string | null) => (s || "").replace(/\n/g, "\\n").replace(/,/g, "\\,");

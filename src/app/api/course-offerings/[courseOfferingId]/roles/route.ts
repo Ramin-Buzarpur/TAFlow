@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { AppError } from "@/server/errors";
+import { ok, created, fail } from "@/server/utils/api";
 import { requireUser } from "@/server/auth/session";
 import { assignCourseRole, listCourseRoleAssignments } from "@/server/services/course-roles";
 
@@ -11,18 +10,12 @@ export async function GET(
     const user = await requireUser();
     const { courseOfferingId } = await context.params;
     const url = new URL(request.url);
-    const result = await listCourseRoleAssignments(user.id, {
+    return ok(await listCourseRoleAssignments(user.id, {
       courseOfferingId,
       role: url.searchParams.get("role") || undefined,
       includeRevoked: url.searchParams.get("includeRevoked") === "true"
-    });
-    return NextResponse.json({ data: result });
-  } catch (error) {
-    if (error instanceof AppError) {
-      return NextResponse.json({ error: error.code, message: error.message, details: error.details }, { status: error.status });
-    }
-    return NextResponse.json({ error: "INTERNAL_ERROR", message: "Unexpected role list error" }, { status: 500 });
-  }
+    }));
+  } catch (e) { return fail(e, "Unexpected role list error"); }
 }
 
 export async function POST(
@@ -33,12 +26,6 @@ export async function POST(
     const user = await requireUser();
     const { courseOfferingId } = await context.params;
     const body = await request.json();
-    const assignment = await assignCourseRole(user.id, { ...body, courseOfferingId });
-    return NextResponse.json({ data: assignment }, { status: 201 });
-  } catch (error) {
-    if (error instanceof AppError) {
-      return NextResponse.json({ error: error.code, message: error.message, details: error.details }, { status: error.status });
-    }
-    return NextResponse.json({ error: "INTERNAL_ERROR", message: "Unexpected role assignment error" }, { status: 500 });
-  }
+    return created(await assignCourseRole(user.id, { ...body, courseOfferingId }));
+  } catch (e) { return fail(e, "Unexpected role assignment error"); }
 }

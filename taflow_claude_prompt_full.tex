@@ -1,0 +1,469 @@
+
+\documentclass[12pt,a4paper]{article}
+\usepackage[top=2.1cm,bottom=2.1cm,left=2.0cm,right=2.0cm]{geometry}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{fancyhdr}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\usepackage{xepersian}
+\settextfont{DejaVu Sans}
+\setlatintextfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
+\hypersetup{colorlinks=true,linkcolor=blue!60!black,urlcolor=blue!70!black}
+\definecolor{tafblue}{HTML}{2563EB}
+\definecolor{tafteal}{HTML}{0F766E}
+\definecolor{tafgrey}{HTML}{F8FAFC}
+\definecolor{tafdark}{HTML}{0F172A}
+\definecolor{taforange}{HTML}{EA580C}
+\definecolor{tafgreen}{HTML}{16A34A}
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{پرامپت جامع اصلاح و ارتقای TAFlow}
+\lhead{TAFlow / Claude Implementation Prompt}
+\cfoot{\thepage}
+\setlength{\headheight}{15pt}
+\setlist[itemize]{topsep=3pt,itemsep=2pt,parsep=1pt}
+\setlist[enumerate]{topsep=3pt,itemsep=2pt,parsep=1pt}
+\newcommand{\code}[1]{\lr{\texttt{\detokenize{#1}}}}
+\newcommand{\phase}[1]{\noindent\textbf{\textcolor{tafblue}{#1}}}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,columns=fullflexible,keepspaces=true,showstringspaces=false,frame=single,backgroundcolor=\color{tafgrey},rulecolor=\color{tafblue!30}}
+\tcbset{colback=tafgrey,colframe=tafblue!45!black,arc=2mm,boxrule=0.7pt,breakable}
+
+\begin{document}
+
+\begin{center}
+{\Huge \textbf{فایل جامع پرامپت برای اصلاح، تکمیل و بازطراحی TAFlow}}\\[6pt]
+{\Large \textbf{شامل ۷۵ اصلاح فنی، معماری، امنیتی، دیتابیسی و UI/UX}}\\[6pt]
+{\large نسخه آماده برای ارسال به Claude / Claude Code}\\[10pt]
+\end{center}
+
+\begin{tcolorbox}[title=هدف فایل]
+این فایل برای این ساخته شده که متن آن را به Claude بدهی تا ریپازیتوری \code{TAFlow} را کامل بررسی کند، خطاهای معماری و اجرایی را اصلاح کند، ماژول‌های ناقص را تکمیل کند، و ظاهر سایت را بر اساس منابع مدرن UI/UX و انیمیشن‌های کنترل‌شده، حرفه‌ای‌تر کند. فایل هم شامل چک‌لیست کامل اصلاحات است و هم یک پرامپت آماده که می‌توانی مستقیماً به Claude بدهی.
+\end{tcolorbox}
+
+\section{لینک‌های اصلی پروژه و منابع طراحی}
+\begin{latin}
+\begin{itemize}
+  \item TAFlow repository: \url{https://github.com/Ramin-Buzarpur/TAFlow}
+  \item UI/UX Pro Max Skill: \url{https://github.com/nextlevelbuilder/ui-ux-pro-max-skill}
+  \item Magic UI: \url{https://github.com/magicuidesign/magicui?tab=readme-ov-file}
+  \item AOS Animate On Scroll: \url{https://github.com/michalsnik/aos?tab=readme-ov-file}
+  \item Locomotive Scroll: \url{https://github.com/locomotivemtl/locomotive-scroll}
+  \item Motion: \url{http://github.com/motiondivision/motion}
+  \item Aceternity Text Flipping Board: \url{https://ui.aceternity.com/components/text-flipping-board}
+\end{itemize}
+\end{latin}
+
+\section{خلاصه وضعیت فعلی TAFlow}
+پروژه \code{TAFlow} یک سامانه full-stack برای مدیریت دستیاران آموزشی است. بر اساس ساختار فعلی ریپازیتوری، پروژه شامل Next.js App Router، TypeScript، Prisma/PostgreSQL، Auth.js/NextAuth، Zod، Argon2، TOTP 2FA، Docker Compose، صفحات RTL فارسی، APIهای متعدد، ماژول‌های پیام‌رسانی، درخواست TA، گواهی، نظرسنجی، دفتر نمره و گزارش‌گیری است. این سطح از پیاده‌سازی برای MVP بسیار خوب است؛ اما برای نسخه پایدار و قابل دفاع باید چند دسته اصلاح جدی انجام شود:
+
+\begin{enumerate}
+  \item تثبیت محیط توسعه، package manager و نسخه‌ها.
+  \item اصلاح دیتابیس و constraintها.
+  \item تکمیل workflowهای Head TA، دفتر نمره، نظرسنجی، گواهی و جلسات رفع اشکال.
+  \item افزایش امنیت، audit، rate limiting و تست permissionها.
+  \item بازطراحی UI/UX به شکل مدرن، گرافیکی، role-based، responsive و قابل استفاده.
+  \item اضافه‌کردن انیمیشن‌های کنترل‌شده، اسکرول مدرن، micro-interaction و جلوه‌های landing page بدون تخریب performance و accessibility.
+\end{enumerate}
+
+\section{چک‌لیست کامل ۷۵ اصلاح و بهبود}
+
+\subsection{الف) اصلاحات حیاتی زیرساخت و نسخه‌ها}
+\begin{enumerate}
+  \item \textbf{یکسان‌سازی package manager:} پروژه نباید هم‌زمان \code{package-lock.json} و اجرای \code{pnpm} داشته باشد. تصمیم نهایی: استفاده از \code{pnpm}. حذف \code{package-lock.json}، ساخت و commit کردن \code{pnpm-lock.yaml}، و اضافه‌کردن \code{"packageManager": "pnpm@11.9.0"} به \code{package.json}.
+  \item \textbf{قفل کردن نسخه dependencyها:} نسخه‌های اصلی مثل \code{next}، \code{react}، \code{react-dom}، \code{prisma}، \code{@prisma/client}، \code{next-auth}، \code{typescript} و \code{zod} باید بدون \code{^} یا \code{~} ثبت شوند تا نصب‌های بعدی پروژه را خراب نکند.
+  \item \textbf{تثبیت Prisma روی نسخه سازگار:} فعلاً پروژه باید روی \code{prisma@6.19.3} و \code{@prisma/client@6.19.3} pin شود؛ چون schema فعلی با Prisma 7 سازگار نیست. در آینده migration به \code{prisma.config.ts} انجام شود.
+  \item \textbf{حذف وابستگی به config deprecated:} بخش \code{package.json#prisma} برای seed در بلندمدت به \code{prisma.config.ts} منتقل شود تا در Prisma 7 خطا ایجاد نکند.
+  \item \textbf{نوشتن راهنمای troubleshooting:} README باید خطاهای رایج مثل \code{Prisma 7 datasource url error}، \code{pnpm approve-builds}، کندی npm، conflict پورت PostgreSQL، reset دیتابیس و seed دوباره را توضیح دهد.
+\end{enumerate}
+
+\subsection{ب) اصلاحات دیتابیس و Prisma schema}
+\begin{enumerate}[resume]
+  \item \textbf{اصلاح unique در CourseRoleAssignment:} constraint فعلی \code{@@unique([courseOfferingId, userId, role])} با تاریخچه revoke سازگار نیست. باید حذف شود و در migration دستی یک partial unique index فقط برای نقش‌های فعال ساخته شود:
+\begin{latin}\begin{lstlisting}
+CREATE UNIQUE INDEX course_role_active_unique
+ON "CourseRoleAssignment" ("courseOfferingId", "userId", "role")
+WHERE "revokedAt" IS NULL;
+\end{lstlisting}\end{latin}
+  \item \textbf{اصلاح رأی‌گیری ناشناس PollVote:} unique روی \code{[pollId, voterId]} برای \code{NULL} کافی نیست. باید \code{respondentHash} برای anonymous vote اجباری شود و partial unique index اضافه شود:
+\begin{latin}\begin{lstlisting}
+CREATE UNIQUE INDEX poll_vote_hash_unique
+ON "PollVote" ("pollId", "respondentHash")
+WHERE "respondentHash" IS NOT NULL;
+\end{lstlisting}\end{latin}
+  \item \textbf{اصلاح مدل SurveyAnswer:} برای جلوگیری از پاسخ تکراری، مدل باید دو مرحله‌ای شود: \code{SurveyResponse} و \code{SurveyAnswer}. هر response یکبار برای یک survey و هر answer یکبار برای یک question باشد.
+  \item \textbf{جلوگیری از evaluation تکراری:} برای \code{ProfessorEvaluation} و \code{TAEvaluation} باید unique بر اساس \code{courseOfferingId}، ارزیاب و فرد ارزیابی‌شونده اضافه شود. در حالت anonymous از \code{respondentHash} استفاده شود.
+  \item \textbf{CHECK constraint برای ratingها:} امتیازهای professor/TA/session/survey باید در دیتابیس بین ۱ تا ۵ یا بازه تعریف‌شده باشند.
+  \item \textbf{CHECK constraint برای نمره:} در \code{GradeRecord} مقدار \code{score} نباید منفی یا بیشتر از \code{maxScore} باشد، مگر اینکه bonus به صورت صریح طراحی شود.
+  \item \textbf{کنترل وزن GradeCategory:} مجموع وزن categoryهای یک درس باید در service به ۱۰۰ درصد محدود شود یا طبق سیاست پروژه کنترل شود.
+  \item \textbf{کنترل بازه تاریخ‌ها:} برای \code{OfficeHourSession}، \code{TAOpportunity}، \code{AcademicCalendarEvent}، \code{AvailabilityPoll} و بازه‌های گواهی باید \code{start < end} enforce شود.
+  \item \textbf{اصلاح timezone پیش‌فرض:} اگر مخاطب فارسی/ایرانی است، پیش‌فرض از \code{Asia/Baku} به \code{Asia/Tehran} یا بهتر از آن به \code{APP_DEFAULT_TIMEZONE} قابل تنظیم در env تغییر کند.
+  \item \textbf{تاریخ شمسی و UTC:} ذخیره دیتابیس باید UTC بماند، اما UI باید Jalali date picker، نمایش شمسی، timezone-aware formatting و export دوگانه شمسی/میلادی داشته باشد.
+  \item \textbf{سیاست soft delete:} برای user، file، message، grade، certificate و application مشخص شود که delete واقعی مجاز است یا فقط archived/revoked/deletedAt.
+  \item \textbf{تکمیل idempotent seed:} همه داده‌های seed با \code{upsert} ساخته شوند یا با \code{seedTag} قابل پاک‌سازی باشند تا اجرای چندباره seed باعث duplicate نشود.
+\end{enumerate}
+
+\subsection{ج) Auth، RBAC و امنیت}
+\begin{enumerate}[resume]
+  \item \textbf{تست کامل permissionها:} برای همه routeهای حساس سناریوهای 401، 403، role اشتباه، role منقضی، role revoke شده، student دسترسی به professor route، و TA ویرایش grade غیرمجاز تست شود.
+  \item \textbf{Rate limit production-grade:} rate limit فقط در memory نباشد؛ با Redis/Upstash/Redis Docker پیاده شود. مسیرهای login، register، forgot-password، message، file upload، application، survey، poll و certificate محدود شوند.
+  \item \textbf{تکمیل سیاست SSO/Keycloak:} برای SSO باید allowed domains، وضعیت email verification، نقش پیش‌فرض، رفتار user suspended/deleted و mapping نقش‌ها مشخص شود.
+  \item \textbf{Audit log اجباری:} role assignment/revoke، application accept/reject، grade change/publish، certificate issue/revoke، file download، survey results view، user suspension، 2FA disable و password reset حتماً audit شوند.
+  \item \textbf{یکسان‌سازی error response:} همه APIها ساختار خطای ثابت داشته باشند: \code{ok: false}، \code{error.code}، \code{error.message}، \code{details}.
+  \item \textbf{اعتبارسنجی env با Zod:} فایل \code{src/env.ts} ساخته شود و envهای حیاتی مثل \code{DATABASE_URL}، \code{AUTH_SECRET}، \code{AUTH_ENCRYPTION_KEY}، \code{NEXTAUTH_URL}، storage و SMTP validate شوند.
+  \item \textbf{Security headers:} در \code{next.config.mjs} یا middleware، headerهای \code{Content-Security-Policy}، \code{X-Frame-Options}، \code{X-Content-Type-Options}، \code{Referrer-Policy}، \code{Permissions-Policy} و \code{Strict-Transport-Security} اضافه شود.
+  \item \textbf{CSRF/Origin check:} برای همه mutation routeها یعنی \code{POST}، \code{PATCH} و \code{DELETE}، session و origin بررسی شود.
+  \item \textbf{MFA برای نقش‌های حساس:} برای \code{PROFESSOR}، \code{EDUCATION_ADMIN} و ترجیحاً \code{HEAD_TA}، 2FA اجباری شود.
+  \item \textbf{تست escalation:} سناریوهایی مثل TA که خودش را Head TA کند، student که status application خودش را approve کند، student که grade خودش را تغییر دهد، Head TA که نقش professor بدهد، و کاربر suspended با session فعال تست شوند.
+\end{enumerate}
+
+\subsection{د) گردش کار TA / Head TA}
+\begin{enumerate}[resume]
+  \item \textbf{هماهنگی Head TA با نیاز پروژه:} مشخص شود Head TA فقط recommendation می‌دهد یا واقعاً approve/reject می‌کند. اگر باید اختیار واقعی داشته باشد، permissionهای \code{APPROVE_TA_APPLICATION}، \code{REJECT_TA_APPLICATION} و \code{ASSIGN_TA_ROLE} اضافه شود.
+  \item \textbf{درخواست جدا برای TA و Head TA:} اگر کاربر می‌تواند هم برای TA و هم Head TA یک فرصت درخواست بدهد، unique باید به \code{[opportunityId, applicantId, requestedRole]} تغییر کند.
+  \item \textbf{Scoring توضیح‌پذیر:} سیستم پیشنهاد TA باید دلیل ارائه دهد: معدل، نمره درس، گذراندن درس، سابقه TA، availability، مهارت‌ها و ارزیابی‌های قبلی.
+  \item \textbf{Workflow مصاحبه کامل:} وضعیت‌های shortlist، interview scheduled، interview completed، interview score، professor note، headTA note، final decision، offer sent، offer accepted/declined اضافه شود.
+  \item \textbf{Appeal/review:} دانشجو بتواند درخواست بررسی مجدد یا اعتراض ثبت کند و استاد/آموزش پاسخ دهد. همه رویدادها audit شوند.
+  \item \textbf{Talent Pool واقعی:} مهارت‌ها، درس‌های گذرانده‌شده، نمره‌ها، سابقه TA، ارزیابی قبلی، availability و professor favorite list اضافه شود.
+  \item \textbf{Recommendation Engine:} برای هر درس، سیستم بهترین TAها را با امتیاز و دلیل پیشنهاد دهد.
+\end{enumerate}
+
+\subsection{ه) دفتر نمره، تکالیف و اعتراض نمره}
+\begin{enumerate}[resume]
+  \item \textbf{Assignment دقیق grade item به TA:} مدل \code{GradeItemAssignee} اضافه شود تا TA فقط grade itemهای assigned به خودش را ویرایش کند.
+  \item \textbf{Regrade request:} دانشجو بتواند برای یک نمره اعتراض ثبت کند: reason، status، assignedTo، response، resolvedAt.
+  \item \textbf{Rubric:} مدل‌های \code{Rubric}، \code{RubricCriterion} و \code{RubricScore} برای نمره‌دهی منصفانه‌تر اضافه شود.
+  \item \textbf{Import از Excel:} علاوه بر export، import نمره با validation، preview خطاها و تایید نهایی اضافه شود.
+  \item \textbf{Lock بعد از publish:} بعد از انتشار نمره، تغییر مستقیم توسط TA ممنوع شود و فقط با request و approval انجام شود.
+  \item \textbf{Grade Change Workflow:} مدل \code{GradeChangeLog} باید با workflow approval کامل شود، نه فقط ثبت تغییر ساده.
+\end{enumerate}
+
+\subsection{و) جلسات رفع اشکال، Meet و حضورغیاب}
+\begin{enumerate}[resume]
+  \item \textbf{ثبت‌نام دانشجو برای جلسه:} مدل \code{OfficeHourRegistration} با unique روی \code{[sessionId, studentId]} اضافه شود.
+  \item \textbf{Attendance:} مشخص شود چه کسانی ثبت‌نام کردند، چه کسانی حضور داشتند، چند نفر حاضر شدند و رضایت جلسه چقدر بود.
+  \item \textbf{Recurring sessions:} جلسات هفتگی، تکرار تا تاریخ مشخص و cancel کردن یک occurrence اضافه شود.
+  \item \textbf{Google Calendar/Meet integration:} فعلاً URL دستی کافی است، اما نسخه بهتر باید Google Calendar API، ساخت Meet link، reminder ایمیلی و iCal را کامل‌تر کند.
+\end{enumerate}
+
+\subsection{ز) گواهی TA / Head TA}
+\begin{enumerate}[resume]
+  \item \textbf{QR و verification page قوی:} هر گواهی باید QR code، verifyCode، صفحه عمومی verification، role، course، semester، hours/workload و issuer داشته باشد.
+  \item \textbf{Certificate revocation:} امکان revoke با reason، revokedBy و revokedAt اضافه شود.
+  \item \textbf{صدور گروهی گواهی:} استاد یا آموزش بتواند در پایان ترم برای چند TA/Head TA یکجا گواهی صادر کند.
+  \item \textbf{قالب PDF رسمی:} قالب گواهی با نام دانشگاه، شماره رهگیری، امضای دیجیتال/تصویری مجاز، QR و اطلاعات محدود قابل چاپ طراحی شود.
+\end{enumerate}
+
+\subsection{ح) پیام‌رسانی، فایل و اعلان‌ها}
+\begin{enumerate}[resume]
+  \item \textbf{Unread count و seen status:} threadها باید تعداد پیام خوانده‌نشده و last read timestamp داشته باشند.
+  \item \textbf{Attachment پیام:} مدل \code{MessageAttachment} برای ارسال فایل داخل گفت‌وگو اضافه شود.
+  \item \textbf{ضد spam و moderation:} rate limit پیام، report message، mute/block thread و admin moderation اضافه شود.
+  \item \textbf{Sanitize محتوای پیام:} اگر پیام rich text باشد، HTML حتماً sanitize شود تا XSS رخ ندهد.
+  \item \textbf{Virus scan فایل:} مدل \code{UploadedFile} باید \code{scanStatus}، \code{scanAt} و \code{scanProvider} داشته باشد.
+  \item \textbf{Audit دانلود فایل:} دانلود رزومه، گواهی، فایل نمره و فایل خصوصی درس باید audit شود.
+  \item \textbf{Signed URL:} فایل‌ها نباید public مستقیم باشند؛ URL موقت با expiration و permission check ایجاد شود.
+  \item \textbf{Notification channels:} اعلان‌ها باید channel داشته باشند: in-app، email، digest، urgent، read/unread و scheduled reminder.
+  \item \textbf{Activity Timeline:} برای هر course offering timeline فعالیت‌ها نمایش داده شود: درخواست TA، بررسی، جلسه، نمره، گواهی، پیام و اطلاعیه.
+\end{enumerate}
+
+\subsection{ط) نظرسنجی، ارزیابی و حریم خصوصی}
+\begin{enumerate}[resume]
+  \item \textbf{آستانه حداقل پاسخ:} نتایج anonymous اگر کمتر از مثلاً ۵ پاسخ دارند، نمایش داده نشوند.
+  \item \textbf{تحلیل کیفی نظرات:} دسته‌بندی نظرات به positive، negative، neutral، keyword summary و شکایت‌های پرتکرار اضافه شود.
+  \item \textbf{ارزیابی دوره‌ای:} midterm evaluation، endterm evaluation، office hour feedback، TA performance review و professor evaluation اضافه شود.
+  \item \textbf{Privacy-aware exports:} خروجی‌های survey/evaluation نباید respondent را افشا کنند، مگر برای admin مجاز و با audit.
+\end{enumerate}
+
+\subsection{ی) UI/UX، داشبورد و تجربه کاربری}
+\begin{enumerate}[resume]
+  \item \textbf{Loading/Empty/Error state:} همه صفحات باید loading skeleton، empty state، error state، retry button و permission denied state داشته باشند.
+  \item \textbf{داشبوردهای role-based واقعی:} داشبورد student، TA، Head TA، Professor و Admin باید کاملاً متفاوت و متناسب با نیاز همان نقش باشد.
+  \item \textbf{Command Palette permission-aware:} جستجوی Ctrl+K نباید نتیجه‌ای نشان دهد که کاربر permission دیدنش را ندارد.
+  \item \textbf{Responsive mobile:} جدول‌ها، کارت‌ها، فرم‌ها، فیلترها و actionها باید روی موبایل قابل استفاده باشند.
+  \item \textbf{Jalali UI:} date picker شمسی، اعداد فارسی optional، RTL calendar و خروجی تاریخ شمسی اضافه شود.
+  \item \textbf{Dark mode کامل:} dark mode فقط تغییر رنگ ساده نباشد؛ همه کامپوننت‌ها، chartها، formها و statusها باید سازگار شوند.
+  \item \textbf{Design system واحد:} tokenهای رنگ، radius، shadow، typography، spacing، motion و component variants باید در فایل‌های مرکزی تعریف شوند.
+\end{enumerate}
+
+\subsection{ک) DevOps، تست و مستندات}
+\begin{enumerate}[resume]
+  \item \textbf{Dockerfile production:} علاوه بر docker-compose dev، فایل \code{Dockerfile} و \code{docker-compose.prod.yml} اضافه شود.
+  \item \textbf{Health check کامل:} health endpoint باید database، storage، mail service optional، app version و migration status را بررسی کند.
+  \item \textbf{CI/CD با GitHub Actions:} pipeline شامل install، generate، typecheck، lint، test، build، Playwright و migration check اضافه شود.
+  \item \textbf{Backup strategy:} برای PostgreSQL و object storage بکاپ روزانه، restore script، encryption و retention policy تعریف شود.
+  \item \textbf{OpenAPI documentation:} فایل \code{openapi.yaml} و Swagger UI یا مستند API با examples، auth و error codes اضافه شود.
+  \item \textbf{ERD دیتابیس:} نمودار ERD برای User، Course، CourseOffering، RoleAssignment، TAApplication، Gradebook، Survey، Certificate و Message ساخته شود.
+  \item \textbf{گزارش نهایی تغییرات:} Claude باید در انتها لیست فایل‌های تغییرکرده، migrationها، تست‌ها و باقی‌مانده‌ها را گزارش کند.
+\end{enumerate}
+
+\subsection{ل) قابلیت‌های جدید محصولی}
+\begin{enumerate}[resume]
+  \item \textbf{Task Management برای TAها:} استاد/Head TA بتواند task تعریف کند: تصحیح تمرین، جلسه حل تمرین، پاسخ پیام‌ها، آماده‌سازی کوییز و آپلود فایل.
+  \item \textbf{Timesheet:} TA فعالیت روزانه، نوع فعالیت، مدت زمان و توضیح را ثبت کند و Head TA/Professor تایید کند.
+  \item \textbf{Workload balancing:} سیستم نشان دهد کدام TA بیش از حد task دارد و کدام کمتر درگیر است.
+  \item \textbf{Conflict detection:} هنگام انتخاب TA تداخل زمانی کلاس، امتحان، جلسه رفع اشکال و وضعیت enrollment بررسی شود.
+  \item \textbf{پنل کامل Education Admin:} مدیریت ترم، درس، ارائه، استاد، دانشجو، گزارش کلی TA، گواهی رسمی و audit.
+  \item \textbf{Import/Export کامل Excel:} لیست دانشجویان، اعضای کلاس، نمرات، گزارش TAها، گواهی‌ها و surveyها با Excel و CSV مدیریت شوند.
+  \item \textbf{گزارش‌ها و نمودارها:} نمودار تعداد درخواست‌ها، TAهای فعال، عملکرد جلسات، میانگین نمرات و رضایت دانشجوها اضافه شود.
+\end{enumerate}
+
+\section{الزامات طراحی و استایل مدرن}
+\subsection{هدف طراحی}
+هدف این است که TAFlow از نظر ظاهر شبیه یک محصول SaaS دانشگاهی مدرن شود، نه فقط یک پنل ساده. طراحی باید حس حرفه‌ای، گرافیکی، قابل اعتماد، تمیز، سریع و دانشگاهی بدهد. سایت باید هنگام اسکرول در صفحات معرفی و landing page حس حرکت و عمق داشته باشد؛ یعنی المان‌ها آرام جابه‌جا شوند، کارت‌ها reveal شوند، text effectها در hero دیده شوند و بخش‌ها با parallax محدود و کنترل‌شده وارد صفحه شوند. در عین حال پنل‌های عملیاتی مثل gradebook و admin نباید به خاطر animation کند یا شلوغ شوند.
+
+\subsection{منابع طراحی و نحوه استفاده}
+\begin{enumerate}
+  \item \textbf{UI/UX Pro Max Skill:} Claude باید این repo را بخواند و از design guidelineها، paletteها، typography pairingها، accessibility و dashboard patternهای آن برای ساخت design system استفاده کند.
+  \item \textbf{Magic UI:} برای micro-interactionها، background effectها، hero sectionها، cardهای متحرک، border beam، spotlight، shimmer، grid pattern و componentهای shadcn-compatible از Magic UI الهام بگیرد یا با رعایت license استفاده کند.
+  \item \textbf{AOS:} برای reveal animation ساده هنگام scroll در landing، marketing، feature sections و documentation pages استفاده شود. برای dashboardها محدود استفاده شود.
+  \item \textbf{Locomotive Scroll / Lenis:} برای smooth scroll و parallax effect فقط در صفحات عمومی مثل homepage، landing، about و feature pages استفاده شود؛ نه در جدول‌ها و پنل‌های سنگین. در موبایل و prefers-reduced-motion غیرفعال یا سبک شود.
+  \item \textbf{Motion:} برای animationهای React component، page transition محدود، card hover، modal transition، tab transition و staggered lists استفاده شود.
+  \item \textbf{Aceternity Text Flipping Board:} در hero صفحه اصلی، برای نمایش عباراتی مثل \lr{TAFlow}، \lr{Teaching Assistant System}، \lr{Course Roles}، \lr{Smart Academic Workflow} یا نسخه فارسی آن استفاده شود.
+\end{enumerate}
+
+\subsection{قانون‌های طراحی}
+\begin{itemize}
+  \item UI باید RTL-first باشد.
+  \item ظاهر باید مدرن، گرافیکی و polished باشد، اما شلوغ و فانتزی بی‌هدف نشود.
+  \item انیمیشن‌ها باید معنادار باشند: reveal، emphasis، hierarchy، feedback.
+  \item برای کارهای مدیریتی، سرعت و خوانایی اولویت دارد؛ برای landing page، جلوه گرافیکی اولویت بیشتری دارد.
+  \item همه animationها باید \code{prefers-reduced-motion} را رعایت کنند.
+  \item نباید layout shift ایجاد شود.
+  \item نباید smooth scroll باعث خراب شدن keyboard navigation یا focus شود.
+  \item بخش‌های فرم، جدول، gradebook و admin باید ساده، سریع و accessible بمانند.
+  \item از رنگ‌های قابل اعتماد دانشگاهی استفاده شود: آبی عمیق، teal، slate، white، accent محدود بنفش/آبی.
+  \item همه کامپوننت‌ها باید light/dark mode داشته باشند.
+\end{itemize}
+
+\section{پرامپت آماده برای ارسال به Claude}
+\begin{tcolorbox}[title=پرامپت نهایی برای Claude - از اینجا کپی کن]
+\textbf{نقش تو:} تو یک senior full-stack engineer، product designer، database architect و UI/UX specialist هستی. باید ریپازیتوری زیر را کامل بررسی و اصلاح کنی، بدون اینکه فقط تغییرات سطحی انجام بدهی:
+
+\begin{latin}\begin{lstlisting}
+Repository: https://github.com/Ramin-Buzarpur/TAFlow
+\end{lstlisting}\end{latin}
+
+\textbf{منابع طراحی که باید قبل از شروع بخوانی:}
+\begin{latin}\begin{lstlisting}
+https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
+https://github.com/magicuidesign/magicui?tab=readme-ov-file
+https://github.com/michalsnik/aos?tab=readme-ov-file
+https://github.com/locomotivemtl/locomotive-scroll
+http://github.com/motiondivision/motion
+https://ui.aceternity.com/components/text-flipping-board
+\end{lstlisting}\end{latin}
+
+\textbf{هدف کلی:} پروژه TAFlow را از یک MVP فول‌استک به یک نسخه پایدارتر، امن‌تر، حرفه‌ای‌تر و از نظر UI/UX بسیار مدرن‌تر تبدیل کن. تمام موارد فنی، دیتابیسی، امنیتی، workflow، testing، documentation و design enhancement زیر را بررسی و تا حد ممکن پیاده‌سازی کن. اگر موردی نیازمند تصمیم محصولی است، بهترین تصمیم را با توضیح انتخاب کن و در گزارش نهایی بنویس.
+
+\subsection*{قوانین مهم قبل از تغییر کد}
+\begin{enumerate}
+  \item اول کل پروژه را audit کن: \code{package.json}، lockfileها، \code{prisma/schema.prisma}، services، API routes، components، pages، tests، docs و docker files.
+  \item هیچ قابلیت موجودی را حذف نکن مگر اینکه دلیل فنی واضح داشته باشد.
+  \item تغییرات را فازبندی کن و بعد از هر فاز تست مناسب اجرا کن.
+  \item کد باید TypeScript-safe، Prisma-safe، RBAC-safe و production-oriented باشد.
+  \item هر migration دیتابیسی باید قابل توضیح و قابل rollback نسبی باشد.
+  \item UI باید Persian RTL را حفظ کند.
+  \item برای animationها performance، accessibility و reduced-motion را رعایت کن.
+  \item اگر از Magic UI، Motion، AOS، Locomotive Scroll یا Aceternity ایده یا component گرفتی، license و dependency impact را بررسی کن.
+  \item خروجی نهایی باید شامل گزارش کامل فایل‌های تغییرکرده، تست‌های اجراشده و موارد باقی‌مانده باشد.
+\end{enumerate}
+
+\subsection*{فاز ۱ - تثبیت پروژه و dependencyها}
+\begin{enumerate}
+  \item package manager را یکسان کن. پروژه باید فقط با \code{pnpm} مدیریت شود.
+  \item \code{package-lock.json} را حذف کن و \code{pnpm-lock.yaml} را مبنای نصب قرار بده.
+  \item به \code{package.json} مقدار \code{"packageManager": "pnpm@11.9.0"} اضافه کن.
+  \item نسخه dependencyهای اصلی را pin کن و از \code{^} و \code{~} برای موارد حیاتی استفاده نکن.
+  \item Prisma را فعلاً روی نسخه \code{6.19.3} نگه دار مگر اینکه کل پروژه را کامل به Prisma 7 migrate کنی.
+  \item اگر Prisma 7 انتخاب شد، حتماً \code{prisma.config.ts}، حذف \code{url} از datasource، تغییر seed config و adapter لازم را کامل انجام بده.
+  \item README را با راهنمای نصب واقعی با \code{pnpm}، \code{pnpm approve-builds}، Docker، migration، seed و troubleshooting تکمیل کن.
+\end{enumerate}
+
+\subsection*{فاز ۲ - اصلاحات دیتابیس و schema}
+\begin{enumerate}
+  \item unique فعلی \code{CourseRoleAssignment} را با partial unique index برای roleهای فعال جایگزین کن.
+  \item anonymous voting را در \code{PollVote} اصلاح کن تا چندبار رأی دادن با \code{NULL voterId} ممکن نباشد.
+  \item مدل survey را با \code{SurveyResponse} و \code{SurveyAnswer} بازطراحی کن تا duplicate answer ثبت نشود.
+  \item برای evaluationها unique constraint و rating check اضافه کن.
+  \item برای grade score و maxScore check constraint اضافه کن.
+  \item بازه تاریخ‌ها را validate و در صورت امکان با database constraints enforce کن.
+  \item timezone پیش‌فرض را configurable کن.
+  \item seed را idempotent کن.
+  \item اگر migration دستی لازم است، فایل migration را با SQL واضح بساز و توضیح بده.
+\end{enumerate}
+
+\subsection*{فاز ۳ - Auth، امنیت و RBAC}
+\begin{enumerate}
+  \item همه routeهای حساس را permission-aware کن.
+  \item برای roleهای منقضی یا revoke شده دسترسی قطع شود.
+  \item rate limit را به Redis-compatible implementation منتقل کن یا حداقل abstraction مناسب ایجاد کن.
+  \item برای login، register، forgot-password، upload، message، application، survey، poll و certificate rate limit بگذار.
+  \item security headers و origin check برای mutation routeها اضافه کن.
+  \item env validation با Zod اضافه کن.
+  \item MFA را برای Professor، Education Admin و Head TA قابل اجبار کن.
+  \item audit log را برای عملیات حساس کامل کن.
+  \item error response همه APIها را یکدست کن.
+\end{enumerate}
+
+\subsection*{فاز ۴ - تکمیل workflowهای اصلی محصول}
+\begin{enumerate}
+  \item workflow Head TA را کامل کن: recommendation یا approve/reject واقعی را پیاده کن و permissionهای لازم را اضافه کن.
+  \item application workflow را با shortlist، interview، note، score، offer و accept/decline کامل کن.
+  \item appeal/review برای درخواست‌های TA اضافه کن.
+  \item grade item assignment به TA اضافه کن.
+  \item regrade request و rubric اضافه کن.
+  \item import Excel برای gradebook و roster اضافه کن.
+  \item office hour registration، attendance و recurring sessions اضافه کن.
+  \item certificate verification را با QR، revoke و bulk issue کامل کن.
+  \item message unread count، attachment و moderation را اضافه کن.
+  \item uploaded file signed URL، scan status و audit download را اضافه کن.
+  \item notification channels و activity timeline اضافه کن.
+  \item task management، timesheet، workload balancing و conflict detection را اضافه کن.
+  \item talent pool و recommendation engine را تا حد امکان عملیاتی کن.
+\end{enumerate}
+
+\subsection*{فاز ۵ - بازطراحی UI/UX بر اساس منابع داده‌شده}
+ابتدا منابع زیر را بخوان و از آنها pattern بگیر:
+\begin{itemize}
+  \item \code{ui-ux-pro-max-skill}: برای design system، palette، typography، accessibility، UX patterns و dashboard structure.
+  \item \code{magicui}: برای componentهای زیبا، animated cards، border beam، spotlight، shimmer، grid pattern، hero effects و micro-interactionها.
+  \item \code{AOS}: برای reveal animation هنگام scroll در landing و pages معرفی.
+  \item \code{Locomotive Scroll}: برای smooth scroll و parallax کنترل‌شده فقط در landing و صفحات عمومی.
+  \item \code{Motion}: برای React animation، transitions، hover، tabs، modals، staggered cards و layout animations.
+  \item \code{Aceternity Text Flipping Board}: برای hero section و نمایش پیام‌های متغیر/ split-flap.
+\end{itemize}
+
+\textbf{دیزاین مورد انتظار:}
+\begin{enumerate}
+  \item سایت باید حس SaaS آموزشی مدرن داشته باشد.
+  \item صفحه اصلی باید hero قوی، background گرافیکی، text flipping، bento grid، animated feature cards، stats، timeline و CTA داشته باشد.
+  \item هنگام scroll، بخش‌های landing با fade، slide، parallax و reveal وارد شوند.
+  \item داشبوردها باید role-based و کاملاً متفاوت باشند.
+  \item پنل‌های عملیاتی مثل gradebook، admin، messages و surveys باید سریع، خوانا و کم‌انیمیشن باشند.
+  \item dark mode واقعی پیاده شود.
+  \item loading skeleton، empty state، error state و permission denied state در همه صفحات اضافه شود.
+  \item responsive mobile جدی تست شود.
+  \item Jalali date UI اضافه شود.
+  \item Command palette زیباتر و permission-aware شود.
+  \item charts و reports با کارت‌های تمیز و status color استاندارد نمایش داده شوند.
+\end{enumerate}
+
+\textbf{نکته مهم درباره انیمیشن:} از انیمیشن سنگین بی‌هدف استفاده نکن. Locomotive Scroll را روی صفحات dashboard و table-heavy فعال نکن. برای mobile و reduced-motion انیمیشن را محدود یا خاموش کن. هدف حس مدرن و گرافیکی است، نه کند شدن سایت.
+
+\subsection*{فاز ۶ - تست، کیفیت و مستندات}
+\begin{enumerate}
+  \item تست‌های unit برای validation، RBAC، gradebook، survey privacy، application transitions و file upload کامل کن.
+  \item تست‌های integration برای APIهای حساس اضافه کن.
+  \item Playwright e2e برای ۴ نقش seed شده بساز: admin، professor، headta، student.
+  \item pipeline GitHub Actions اضافه کن: install، generate، typecheck، lint، test، build و e2e.
+  \item OpenAPI docs بساز یا docs/api.md را کامل و دقیق کن.
+  \item ERD دیتابیس تولید کن.
+  \item Dockerfile production و docker-compose.prod.yml اضافه کن.
+  \item health endpoint را کامل کن.
+  \item backup/restore documentation اضافه کن.
+\end{enumerate}
+
+\subsection*{دستورهای تست نهایی که باید اجرا شوند}
+\begin{latin}\begin{lstlisting}
+pnpm install
+pnpm approve-builds
+pnpm db:generate
+pnpm db:migrate --name init
+pnpm db:seed
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+pnpm test:e2e
+\end{lstlisting}\end{latin}
+
+اگر بعضی دستورها در محیط فعلی قابل اجرا نبود، علت دقیق را گزارش کن و کد را طوری بگذار که در محیط توسعه استاندارد اجرا شود.
+
+\subsection*{خروجی نهایی مورد انتظار از Claude}
+در انتها این موارد را گزارش کن:
+\begin{enumerate}
+  \item خلاصه تغییرات انجام‌شده.
+  \item لیست فایل‌های تغییرکرده.
+  \item migrationهای اضافه‌شده.
+  \item dependencyهای اضافه/حذف‌شده.
+  \item تست‌هایی که اجرا شدند و نتیجه آنها.
+  \item بخش‌هایی که به دلیل نیاز به تصمیم محصولی یا محدودیت محیط کامل نشدند.
+  \item دستور دقیق اجرای پروژه از صفر روی ویندوز با PowerShell.
+  \item نکات deploy production.
+\end{enumerate}
+
+\textbf{معیار پذیرش:} پروژه باید با \code{pnpm} نصب شود، Prisma Client generate شود، migration و seed اجرا شود، سایت بالا بیاید، نقش‌ها درست کار کنند، UI مدرن‌تر و گرافیکی‌تر شود، و هیچ permission یا data privacy issue واضحی باقی نماند.
+\end{tcolorbox}
+
+\section{اولویت‌بندی اجرای اصلاحات برای Claude}
+اگر Claude نتواند همه موارد را در یک مرحله انجام دهد، باید به ترتیب زیر عمل کند:
+
+\subsection{اولویت ۱ - حیاتی}
+\begin{itemize}
+  \item package manager و نسخه‌ها.
+  \item Prisma و migrationها.
+  \item CourseRoleAssignment active unique.
+  \item PollVote و Survey duplicate prevention.
+  \item Seed idempotent.
+  \item Permission tests.
+\end{itemize}
+
+\subsection{اولویت ۲ - محصولی}
+\begin{itemize}
+  \item Head TA workflow.
+  \item GradeItem assignment.
+  \item Regrade request.
+  \item Office hour registration.
+  \item Certificate QR/revoke/bulk issue.
+  \item Message attachment/unread.
+\end{itemize}
+
+\subsection{اولویت ۳ - UI/UX و ارائه نهایی}
+\begin{itemize}
+  \item Landing page مدرن با text flipping، bento grid و scroll reveal.
+  \item داشبوردهای role-based.
+  \item Loading/empty/error states.
+  \item Dark mode و responsive.
+  \item Motion/AOS/Locomotive Scroll با رعایت performance.
+\end{itemize}
+
+\section{راهنمای دقیق طراحی صفحه اصلی پیشنهادی}
+صفحه اصلی جدید بهتر است این ساختار را داشته باشد:
+
+\begin{enumerate}
+  \item \textbf{Navbar شفاف/blurred:} لوگو، لینک امکانات، امنیت، مستندات، ورود، ثبت‌نام.
+  \item \textbf{Hero Section:} عنوان بزرگ فارسی، زیرعنوان محصول، Text Flipping Board برای کلمات کلیدی، CTA ورود/مشاهده دمو، mockup داشبورد.
+  \item \textbf{Animated Metrics:} تعداد درخواست‌ها، TAهای فعال، جلسات، surveyها، گواهی‌ها.
+  \item \textbf{Bento Feature Grid:} کارت‌های درخواست TA، Head TA، gradebook، certificates، messages، surveys.
+  \item \textbf{Scroll Timeline:} جریان کار از ایجاد فرصت تا صدور گواهی.
+  \item \textbf{Role Panels Preview:} نمایش کارت‌های دانشجو، استاد، Head TA و آموزش.
+  \item \textbf{Security Section:} RBAC، audit، 2FA، privacy.
+  \item \textbf{Final CTA:} شروع استفاده یا ورود به داشبورد.
+\end{enumerate}
+
+\section{نمونه متن‌های مناسب برای Hero}
+\begin{itemize}
+  \item \textbf{عنوان:} سامانه هوشمند مدیریت دستیاران آموزشی
+  \item \textbf{زیرعنوان:} از درخواست TA تا مدیریت کلاس، نمره‌دهی، ارزیابی، گواهی و ارتباطات آموزشی؛ همه در یک جریان یکپارچه.
+  \item \textbf{کلمات قابل استفاده در Text Flipping Board:} \lr{TAFlow}، \lr{Course Roles}، \lr{Smart TA Selection}، \lr{Gradebook}، \lr{Certificates}، \lr{Academic Workflow}
+\end{itemize}
+
+\section{نکات نهایی برای جلوگیری از خراب شدن پروژه}
+\begin{itemize}
+  \item قبل از هر تغییر بزرگ، وضعیت فعلی پروژه commit شود.
+  \item migrationهای destructive بدون backup یا توضیح انجام نشوند.
+  \item animation libraries فقط در client components استفاده شوند.
+  \item اگر Locomotive Scroll با Next.js hydration مشکل داشت، فقط در \code{useEffect} و با dynamic import فعال شود.
+  \item اگر Motion باعث افزایش bundle زیاد شد، فقط در صفحات لازم import شود.
+  \item اگر Magic UI component نیازمند shadcn setup است، ابتدا سازگاری با Tailwind/Next فعلی بررسی شود.
+  \item صفحات dashboard نباید به خاطر انیمیشن سنگین کند شوند.
+  \item accessibility و keyboard navigation بعد از هر animation تست شود.
+\end{itemize}
+
+\end{document}

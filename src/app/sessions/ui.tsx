@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { JalaliHint } from "@/components/jalali-hint";
 export function NewSessionForm({ offerings, currentUserId }: { offerings: { id: string; title: string }[]; currentUserId: string }) {
   const [msg, setMsg] = useState("");
   async function submit(fd: FormData) {
@@ -14,12 +15,25 @@ export function NewSessionForm({ offerings, currentUserId }: { offerings: { id: 
     <input type="hidden" name="hostId" value={currentUserId}/>
     <input className="input" name="title" placeholder="عنوان جلسه" required/>
     <textarea className="textarea" name="description" placeholder="توضیح"/>
-    <input className="input" name="startsAt" type="datetime-local" required/>
-    <input className="input" name="endsAt" type="datetime-local" required/>
+    <div><input className="input" name="startsAt" type="datetime-local" required/><JalaliHint inputName="startsAt"/></div>
+    <div><input className="input" name="endsAt" type="datetime-local" required/><JalaliHint inputName="endsAt"/></div>
     <input className="input" name="meetingUrl" placeholder="https://meet.google.com/..."/>
     <input className="input" name="location" placeholder="مکان حضوری"/>
     <input className="input" name="capacity" placeholder="ظرفیت"/>
     <button className="btn btn-primary">ثبت جلسه</button>
     {msg ? <p className="muted">{msg}</p> : null}
   </form>;
+}
+
+export function RegisterButton({ sessionId }: { sessionId: string }) {
+  const [msg, setMsg] = useState("");
+  async function register() {
+    const res = await fetch(`/api/sessions/${sessionId}/register`, { method: "POST" });
+    const j = await res.json();
+    setMsg(res.ok ? "ثبت‌نام شد." : j.message || "خطا در ثبت‌نام");
+  }
+  return <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+    <button className="btn" onClick={register}>ثبت‌نام</button>
+    {msg ? <span className="muted" style={{ fontSize: 12 }}>{msg}</span> : null}
+  </span>;
 }

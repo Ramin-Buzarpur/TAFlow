@@ -1,13 +1,8 @@
-import { NextResponse } from "next/server";
+import { ok, fail } from "@/server/utils/api";
 import { resetPassword } from "@/server/services/password-reset";
-import { AppError } from "@/server/errors";
 
 export async function POST(request: Request) {
   try {
-    const result = await resetPassword(await request.json());
-    return NextResponse.json(result);
-  } catch (error) {
-    if (error instanceof AppError) return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
-    return NextResponse.json({ error: "INVALID_REQUEST", message: "Invalid password reset request" }, { status: 400 });
-  }
+    return ok(await resetPassword(await request.json()));
+  } catch (e) { return fail(e, "Invalid password reset request"); }
 }

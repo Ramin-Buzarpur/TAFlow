@@ -1,6 +1,7 @@
 import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
+import QRCode from "qrcode";
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import reshaperPkg from "arabic-persian-reshaper";
@@ -20,6 +21,7 @@ export async function renderCertificatePdf(input: {
   semester: string;
   trackingCode: string;
   issuedAt: Date;
+  verificationUrl?: string;
 }) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
@@ -46,6 +48,14 @@ export async function renderCertificatePdf(input: {
   drawRtl(`در درس ${input.course} در نقش ${input.role} طی ${input.semester} فعالیت داشته است.`, height - 280, 14);
   drawRtl(`کد رهگیری: ${input.trackingCode}`, height - 340, 12);
   drawRtl(`تاریخ صدور: ${input.issuedAt.toLocaleDateString("fa-IR")}`, height - 365, 12);
+
+  if (input.verificationUrl) {
+    const qrDataUrl = await QRCode.toDataURL(input.verificationUrl, { margin: 0, width: 160 });
+    const qrImageBytes = Buffer.from(qrDataUrl.split(",")[1], "base64");
+    const qrImage = await pdfDoc.embedPng(qrImageBytes);
+    const qrSize = 90;
+    page.drawImage(qrImage, { x: width - 60 - qrSize, y: 45, width: qrSize, height: qrSize });
+  }
 
   return Buffer.from(await pdfDoc.save());
 }

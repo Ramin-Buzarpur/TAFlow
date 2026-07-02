@@ -48,7 +48,7 @@ const providers: NextAuthConfig["providers"] = [
       if (!parsed.success) return null;
 
       const meta = await getRequestMeta();
-      const limiter = checkRateLimit(
+      const limiter = await checkRateLimit(
         makeRateLimitKey("login", meta.ipAddress, parsed.data.email),
         8,
         15 * 60 * 1000

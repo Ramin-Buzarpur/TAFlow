@@ -142,3 +142,52 @@ POST /api/auth/reset-password
 ```
 
 `forgot-password` همیشه response عمومی برمی‌گرداند تا enumeration ایمیل رخ ندهد. در development، token برای تست برگردانده می‌شود؛ در production باید از طریق ایمیل ارسال شود.
+
+## Certificates
+
+```http
+POST /api/certificates/:id/revoke
+```
+
+Body: `{ "reason": "..." }` — فقط PROFESSOR/HEAD_TA/ادمین سراسری. `revokedAt`/`revokedById`/`revokeReason` را ست می‌کند؛ گواهی revoke‌شده در `/certificates/verify/:code` به‌عنوان نامعتبر گزارش می‌شود.
+
+```http
+POST /api/certificates/bulk-issue
+```
+
+Body: `{ "requestIds": ["..."] }` — روی هر id، `issueCertificate` موجود را صدا می‌زند و PDF حاوی QR verification تولید می‌کند.
+
+## Office hour registration
+
+```http
+POST   /api/sessions/:id/register
+DELETE /api/sessions/:id/register
+GET    /api/sessions/:id/registrations
+PATCH  /api/registrations/:id/attendance
+```
+
+ثبت‌نام idempotent است (یک دانشجو در هر جلسه یک بار). `attendance` فقط توسط host/HEAD_TA/PROFESSOR قابل ثبت است.
+
+## Messaging unread count
+
+`GET /api/messages` اکنون فیلد `unreadCount` را به‌ازای هر thread برمی‌گرداند. باز کردن یک thread (`GET /api/messages/:id`) به‌صورت خودکار `lastReadAt` را به‌روزرسانی می‌کند.
+
+## Grade item assignment و Regrade requests
+
+```http
+PATCH /api/gradebook/items/:id/assign
+```
+
+Body: `{ "assigneeId": "..." }` — فقط HEAD_TA/PROFESSOR/ادمین. پس از تخصیص، TA دیگر فقط می‌تواند grade itemهای تخصیص‌یافته به خودش را ویرایش کند.
+
+```http
+GET  /api/regrade-requests
+POST /api/regrade-requests
+PATCH /api/regrade-requests/:id/respond
+```
+
+دانشجو با `POST` درخواست تجدیدنظر ثبت می‌کند؛ TA/HEAD_TA/PROFESSOR با `PATCH .../respond` (Body: `{ "status": "APPROVED" | "REJECTED", "response": "...", "newScore": 18.5 }`) پاسخ می‌دهند.
+
+## Response shape
+
+همه روت‌های بالا و روت‌های قدیمی auth از الگوی یکسان `ok()`/`created()`/`fail()` (`src/server/utils/api.ts`) استفاده می‌کنند: پاسخ موفق body مسطح (بدون wrapper اضافه به‌جز `/api/course-offerings/...` که تاریخی `{data}` دارد)، پاسخ خطا `{ "error": "CODE", "message": "...", "details"?: ... }` با کد HTTP مناسب (400/401/403/404/409/429/500).

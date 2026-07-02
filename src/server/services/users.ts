@@ -16,7 +16,7 @@ import { verifyPassword } from "@/server/auth/password";
 export async function registerUser(input: unknown) {
   const data = parseInput(registerSchema, input);
   const meta = await getRequestMeta();
-  const limiter = checkRateLimit(makeRateLimitKey("register", meta.ipAddress, data.email), 5, 60 * 60 * 1000);
+  const limiter = await checkRateLimit(makeRateLimitKey("register", meta.ipAddress, data.email), 5, 60 * 60 * 1000);
   if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many registration attempts", 429);
 
   const exists = await db.user.findUnique({ where: { email: data.email }, select: { id: true } });

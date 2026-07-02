@@ -20,7 +20,7 @@ export function Kanban({ tasks }: { tasks: KanbanTask[] }) {
     await fetch(`/api/tasks/${taskId}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
   }
 
-  return <div className="grid" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 14 }}>
+  return <div className="kanban-grid">
     {COLUMNS.map((col) => <div
       key={col.key}
       onDragOver={(e) => e.preventDefault()}

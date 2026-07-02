@@ -11,7 +11,7 @@ function cleanText(body: string) {
 }
 
 export async function createThread(actorId: string, input: { courseOfferingId?: string; participantIds: string[]; subject: string; body: string; type: "COURSE_GENERAL" | "PRIVATE_STAFF" | "GRADE_APPEAL" | "OFFICE_HOUR" | "ADMIN_SUPPORT" }) {
-  const limiter = checkRateLimit(makeRateLimitKey("create-thread", actorId), 20, 60 * 60 * 1000);
+  const limiter = await checkRateLimit(makeRateLimitKey("create-thread", actorId), 20, 60 * 60 * 1000);
   if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many messages sent", 429);
   if (input.courseOfferingId && !(await canAccessCourseOffering(actorId, input.courseOfferingId))) throw new PermissionError();
   const uniqueParticipants = Array.from(new Set([actorId, ...input.participantIds]));
@@ -32,23 +32,43 @@ export async function createThread(actorId: string, input: { courseOfferingId?: 
 
 export async function listThreads(actorId: string, opts: { courseOfferingId?: string; closed?: boolean; take?: number }) {
   if (opts.courseOfferingId && !(await canAccessCourseOffering(actorId, opts.courseOfferingId))) throw new PermissionError();
-  return db.messageThread.findMany({
+  const threads = await db.messageThread.findMany({
     where: { participants: { some: { userId: actorId } }, ...(opts.courseOfferingId ? { courseOfferingId: opts.courseOfferingId } : {}), ...(typeof opts.closed === "boolean" ? { isClosed: opts.closed } : {}) },
     include: { courseOffering: { include: { course: true } }, participants: { include: { user: { select: { id: true, name: true, email: true } } } }, messages: { orderBy: { createdAt: "desc" }, take: 1 } },
     orderBy: { updatedAt: "desc" },
     take: opts.take ?? 30
   });
+  const unreadCounts = await Promise.all(threads.map(async (thread) => {
+    const me = thread.participants.find((p) => p.userId === actorId);
+    return db.message.count({ where: { threadId: thread.id, ...(me?.lastReadAt ? { createdAt: { gt: me.lastReadAt } } : {}) } });
+  }));
+  return threads.map((thread, i) => ({ ...thread, unreadCount: unreadCounts[i] }));
+}
+
+export async function getUnreadMessageCount(actorId: string) {
+  const participants = await db.messageThreadParticipant.findMany({ where: { userId: actorId }, select: { threadId: true, lastReadAt: true } });
+  const counts = await Promise.all(participants.map((p) =>
+    db.message.count({ where: { threadId: p.threadId, senderId: { not: actorId }, ...(p.lastReadAt ? { createdAt: { gt: p.lastReadAt } } : {}) } })
+  ));
+  return counts.reduce((sum, c) => sum + c, 0);
+}
+
+export async function markThreadRead(actorId: string, threadId: string) {
+  const participant = await db.messageThreadParticipant.findUnique({ where: { threadId_userId: { threadId, userId: actorId } } });
+  if (!participant) throw new PermissionError();
+  return db.messageThreadParticipant.update({ where: { id: participant.id }, data: { lastReadAt: new Date() } });
 }
 
 export async function getThread(actorId: string, id: string) {
   const thread = await db.messageThread.findUnique({ where: { id }, include: { participants: true, messages: { include: { sender: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: "asc" } }, courseOffering: { include: { course: true } } } });
   if (!thread) throw new AppError("NOT_FOUND", "Thread not found", 404);
   if (!thread.participants.some((p) => p.userId === actorId)) throw new PermissionError();
+  await markThreadRead(actorId, id);
   return thread;
 }
 
 export async function replyThread(actorId: string, threadId: string, body: string) {
-  const limiter = checkRateLimit(makeRateLimitKey("reply-thread", actorId), 40, 60 * 60 * 1000);
+  const limiter = await checkRateLimit(makeRateLimitKey("reply-thread", actorId), 40, 60 * 60 * 1000);
   if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many messages sent", 429);
   const thread = await db.messageThread.findUnique({ where: { id: threadId }, include: { participants: true } });
   if (!thread) throw new AppError("NOT_FOUND", "Thread not found", 404);

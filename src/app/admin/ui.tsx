@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { JalaliHint } from "@/components/jalali-hint";
 
 function useSubmit(url: string, buildBody: (fd: FormData) => unknown) {
   const [msg, setMsg] = useState("");
@@ -20,7 +21,7 @@ export function DepartmentForm() {
 
 export function SemesterForm() {
   const { submit, msg } = useSubmit("/api/admin/semesters", (fd) => ({ title: fd.get("title"), code: fd.get("code"), startsAt: fd.get("startsAt"), endsAt: fd.get("endsAt") }));
-  return <form className="form" action={submit}><input className="input" name="title" placeholder="عنوان ترم" required/><input className="input" name="code" placeholder="کد ترم" required/><input className="input" name="startsAt" type="date" required/><input className="input" name="endsAt" type="date" required/><button className="btn btn-primary">افزودن</button>{msg ? <p className="muted">{msg}</p> : null}</form>;
+  return <form className="form" action={submit}><input className="input" name="title" placeholder="عنوان ترم" required/><input className="input" name="code" placeholder="کد ترم" required/><div><input className="input" name="startsAt" type="date" required/><JalaliHint inputName="startsAt"/></div><div><input className="input" name="endsAt" type="date" required/><JalaliHint inputName="endsAt"/></div><button className="btn btn-primary">افزودن</button>{msg ? <p className="muted">{msg}</p> : null}</form>;
 }
 
 export function CourseForm({ departments }: { departments: { id: string; name: string }[] }) {

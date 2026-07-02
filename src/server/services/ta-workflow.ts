@@ -96,7 +96,7 @@ export async function submitTAApplication(userId: string, input: {
   motivationText: string;
   resumeFileId?: string;
 }) {
-  const limiter = checkRateLimit(makeRateLimitKey("submit-application", userId), 20, 60 * 60 * 1000);
+  const limiter = await checkRateLimit(makeRateLimitKey("submit-application", userId), 20, 60 * 60 * 1000);
   if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many application submissions", 429);
 
   const opportunity = await db.tAOpportunity.findUnique({ where: { id: input.opportunityId } });
@@ -170,11 +170,14 @@ export async function updateApplicationStatus(actorId: string, id: string, statu
     });
     if (status === "ACCEPTED") {
       const role = application.requestedRole === "HEAD_TA" ? "HEAD_TA" : "TA";
-      await tx.courseRoleAssignment.upsert({
-        where: { courseOfferingId_userId_role: { courseOfferingId: application.opportunity.courseOfferingId, userId: application.applicantId, role } },
-        create: { courseOfferingId: application.opportunity.courseOfferingId, userId: application.applicantId, role, assignedById: actorId, assignmentSource: "ta_application" },
-        update: { revokedAt: null, revokedById: null, revokeReason: null }
+      const activeExisting = await tx.courseRoleAssignment.findFirst({
+        where: { courseOfferingId: application.opportunity.courseOfferingId, userId: application.applicantId, role, revokedAt: null }
       });
+      if (!activeExisting) {
+        await tx.courseRoleAssignment.create({
+          data: { courseOfferingId: application.opportunity.courseOfferingId, userId: application.applicantId, role, assignedById: actorId, assignmentSource: "ta_application" }
+        });
+      }
     }
     return record;
   });

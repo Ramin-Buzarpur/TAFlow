@@ -15,7 +15,7 @@ export const registerSchema = z.object({
   email: emailSchema,
   password: passwordPolicySchema,
   studentNumber: z.string().trim().min(3).max(40).optional(),
-  timezone: z.string().trim().min(3).max(80).default("Asia/Baku")
+  timezone: z.string().trim().min(3).max(80).default(process.env.APP_TIMEZONE || "Asia/Tehran")
 });
 
 export const loginSchema = z.object({

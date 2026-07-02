@@ -1,8 +1,8 @@
 import "server-only";
 import { db } from "@/server/db";
 import { AppError, PermissionError } from "@/server/errors";
-import { coursePermissions } from "@/server/auth/permissions";
-import { canAccessCourseOffering, requireCoursePermission } from "@/server/services/rbac";
+import { coursePermissions, isGlobalAdmin } from "@/server/auth/permissions";
+import { canAccessCourseOffering, requireCoursePermission, getCourseRoleNames } from "@/server/services/rbac";
 import { writeAuditLog } from "@/server/services/audit";
 import { notifyUser } from "@/server/services/notifications";
 
@@ -25,17 +25,37 @@ export async function createGradeCategory(actorId: string, input: { courseOfferi
   return category;
 }
 
-export async function createGradeItem(actorId: string, input: { courseOfferingId: string; categoryId: string; title: string; maxScore: number; dueAt?: Date; visibility?: "STAFF_ONLY" | "STUDENT_PRIVATE" | "PUBLISHED" }) {
+export async function createGradeItem(actorId: string, input: { courseOfferingId: string; categoryId: string; title: string; maxScore: number; dueAt?: Date; visibility?: "STAFF_ONLY" | "STUDENT_PRIVATE" | "PUBLISHED"; assigneeId?: string }) {
   await requireCoursePermission(actorId, input.courseOfferingId, coursePermissions.MANAGE_GRADEBOOK);
   const item = await db.gradeItem.create({ data: { ...input, createdById: actorId } });
   await writeAuditLog({ actorId, action: "CREATE", entityType: "GradeItem", entityId: item.id, courseOfferingId: input.courseOfferingId, afterJson: item });
   return item;
 }
 
+export async function assignGradeItem(actorId: string, gradeItemId: string, assigneeId: string | null) {
+  const item = await db.gradeItem.findUnique({ where: { id: gradeItemId } });
+  if (!item) throw new AppError("NOT_FOUND", "Grade item not found", 404);
+  await requireCoursePermission(actorId, item.courseOfferingId, coursePermissions.MANAGE_GRADEBOOK);
+  const updated = await db.gradeItem.update({ where: { id: gradeItemId }, data: { assigneeId } });
+  if (assigneeId) await notifyUser({ userId: assigneeId, type: "GRADE", title: "آیتم نمره به شما تخصیص یافت", body: item.title, href: `/gradebook/${item.courseOfferingId}` });
+  await writeAuditLog({ actorId, action: "UPDATE", entityType: "GradeItem", entityId: gradeItemId, courseOfferingId: item.courseOfferingId, metadata: { assigneeId } });
+  return updated;
+}
+
 export async function upsertGradeRecord(actorId: string, input: { gradeItemId: string; studentId: string; score: number; feedback?: string; reason?: string }) {
   const item = await db.gradeItem.findUnique({ where: { id: input.gradeItemId } });
   if (!item) throw new AppError("NOT_FOUND", "Grade item not found", 404);
   await requireCoursePermission(actorId, item.courseOfferingId, coursePermissions.EDIT_ASSIGNED_GRADES);
+
+  if (item.assigneeId && item.assigneeId !== actorId) {
+    const user = await db.user.findUnique({ where: { id: actorId }, select: { globalRole: true } });
+    const roles = await getCourseRoleNames(actorId, item.courseOfferingId);
+    const isOnlyPlainTA = roles.includes("TA") && !roles.includes("HEAD_TA") && !roles.includes("PROFESSOR");
+    if (isOnlyPlainTA && !isGlobalAdmin(user?.globalRole ?? "STUDENT")) {
+      throw new PermissionError("This grade item is assigned to another TA");
+    }
+  }
+
   if (input.score > Number(item.maxScore)) throw new AppError("INVALID_SCORE", "Score cannot exceed max score", 422);
   const previous = await db.gradeRecord.findUnique({ where: { gradeItemId_studentId: { gradeItemId: input.gradeItemId, studentId: input.studentId } } });
   const record = await db.gradeRecord.upsert({
@@ -69,6 +89,43 @@ export async function getStudentGrades(actorId: string, courseOfferingId?: strin
     orderBy: { updatedAt: "desc" }
   });
   return items;
+}
+
+export async function createRegradeRequest(actorId: string, input: { gradeRecordId: string; reason: string }) {
+  const record = await db.gradeRecord.findUnique({ where: { id: input.gradeRecordId }, include: { gradeItem: true } });
+  if (!record) throw new AppError("NOT_FOUND", "Grade record not found", 404);
+  if (record.studentId !== actorId) throw new PermissionError("Only the graded student can request a regrade");
+  const openExisting = await db.regradeRequest.findFirst({ where: { gradeRecordId: input.gradeRecordId, studentId: actorId, status: "OPEN" } });
+  if (openExisting) throw new AppError("REGRADE_ALREADY_OPEN", "You already have an open regrade request for this grade", 409);
+  const request = await db.regradeRequest.create({ data: { gradeRecordId: input.gradeRecordId, studentId: actorId, reason: input.reason } });
+  await notifyUser({ userId: record.editedById, type: "GRADE", title: "درخواست تجدیدنظر نمره", body: record.gradeItem.title, href: `/grades` });
+  await writeAuditLog({ actorId, action: "CREATE", entityType: "RegradeRequest", entityId: request.id, courseOfferingId: record.gradeItem.courseOfferingId, afterJson: request });
+  return request;
+}
+
+export async function respondToRegradeRequest(actorId: string, requestId: string, input: { status: "APPROVED" | "REJECTED"; response: string; newScore?: number }) {
+  const request = await db.regradeRequest.findUnique({ where: { id: requestId }, include: { gradeRecord: { include: { gradeItem: true } } } });
+  if (!request) throw new AppError("NOT_FOUND", "Regrade request not found", 404);
+  if (request.status !== "OPEN") throw new AppError("REGRADE_ALREADY_RESOLVED", "This regrade request was already resolved", 409);
+  await requireCoursePermission(actorId, request.gradeRecord.gradeItem.courseOfferingId, coursePermissions.EDIT_ASSIGNED_GRADES);
+
+  const updated = await db.$transaction(async (tx) => {
+    if (input.status === "APPROVED" && typeof input.newScore === "number") {
+      if (input.newScore > Number(request.gradeRecord.gradeItem.maxScore)) throw new AppError("INVALID_SCORE", "Score cannot exceed max score", 422);
+      const previous = request.gradeRecord;
+      await tx.gradeRecord.update({ where: { id: request.gradeRecordId }, data: { score: input.newScore, editedById: actorId } });
+      await tx.gradeChangeLog.create({ data: { gradeRecordId: request.gradeRecordId, changedById: actorId, oldScore: previous.score, newScore: input.newScore, oldStatus: previous.status, newStatus: previous.status, reason: `regrade: ${input.response}` } });
+    }
+    return tx.regradeRequest.update({ where: { id: requestId }, data: { status: input.status, response: input.response, respondedById: actorId, resolvedAt: new Date() } });
+  });
+
+  await notifyUser({ userId: request.studentId, type: "GRADE", title: "پاسخ به درخواست تجدیدنظر", body: input.response, href: `/grades` });
+  await writeAuditLog({ actorId, action: "UPDATE", entityType: "RegradeRequest", entityId: requestId, courseOfferingId: request.gradeRecord.gradeItem.courseOfferingId, afterJson: updated });
+  return updated;
+}
+
+export async function listMyRegradeRequests(actorId: string) {
+  return db.regradeRequest.findMany({ where: { studentId: actorId }, include: { gradeRecord: { include: { gradeItem: true } } }, orderBy: { createdAt: "desc" } });
 }
 
 export async function exportRosterCsv(actorId: string, courseOfferingId: string) {

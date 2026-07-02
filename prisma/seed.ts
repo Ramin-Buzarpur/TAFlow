@@ -133,17 +133,15 @@ async function main() {
     }
   });
 
-  await prisma.courseRoleAssignment.upsert({
-    where: { courseOfferingId_userId_role: { courseOfferingId: offering.id, userId: professor.id, role: "PROFESSOR" } },
-    update: {},
-    create: { courseOfferingId: offering.id, userId: professor.id, role: "PROFESSOR", assignedById: admin.id }
-  });
+  async function ensureActiveCourseRole(userId: string, role: "PROFESSOR" | "HEAD_TA" | "TA" | "STUDENT" | "EDUCATION_ADMIN", assignedById: string) {
+    const existing = await prisma.courseRoleAssignment.findFirst({ where: { courseOfferingId: offering.id, userId, role, revokedAt: null } });
+    if (!existing) {
+      await prisma.courseRoleAssignment.create({ data: { courseOfferingId: offering.id, userId, role, assignedById } });
+    }
+  }
 
-  await prisma.courseRoleAssignment.upsert({
-    where: { courseOfferingId_userId_role: { courseOfferingId: offering.id, userId: headTa.id, role: "HEAD_TA" } },
-    update: {},
-    create: { courseOfferingId: offering.id, userId: headTa.id, role: "HEAD_TA", assignedById: professor.id }
-  });
+  await ensureActiveCourseRole(professor.id, "PROFESSOR", admin.id);
+  await ensureActiveCourseRole(headTa.id, "HEAD_TA", professor.id);
 
   await prisma.courseEnrollment.upsert({
     where: { courseOfferingId_studentId: { courseOfferingId: offering.id, studentId: student.id } },
@@ -151,39 +149,41 @@ async function main() {
     create: { courseOfferingId: offering.id, studentId: student.id }
   });
 
-  await prisma.courseRoleAssignment.upsert({
-    where: { courseOfferingId_userId_role: { courseOfferingId: offering.id, userId: student.id, role: "STUDENT" } },
-    update: {},
-    create: { courseOfferingId: offering.id, userId: student.id, role: "STUDENT", assignedById: admin.id }
-  });
+  await ensureActiveCourseRole(student.id, "STUDENT", admin.id);
 
-  await prisma.tAOpportunity.create({
-    data: {
-      courseOfferingId: offering.id,
-      createdById: professor.id,
-      title: "جذب TA و Head TA برای مدارهای الکتریکی ۱",
-      description: "ثبت درخواست برای همکاری آموزشی در نیمسال جاری.",
-      requiredTAs: 4,
-      needsHeadTA: true,
-      requirements: "نمره درس حداقل ۱۷، توانایی حل تمرین و پاسخ‌گویی منظم.",
-      deadline: new Date("2026-10-10T20:30:00.000Z"),
-      status: "PUBLISHED",
-      publishedAt: new Date()
-    }
-  });
+  const existingOpportunity = await prisma.tAOpportunity.findFirst({ where: { courseOfferingId: offering.id, title: "جذب TA و Head TA برای مدارهای الکتریکی ۱" } });
+  if (!existingOpportunity) {
+    await prisma.tAOpportunity.create({
+      data: {
+        courseOfferingId: offering.id,
+        createdById: professor.id,
+        title: "جذب TA و Head TA برای مدارهای الکتریکی ۱",
+        description: "ثبت درخواست برای همکاری آموزشی در نیمسال جاری.",
+        requiredTAs: 4,
+        needsHeadTA: true,
+        requirements: "نمره درس حداقل ۱۷، توانایی حل تمرین و پاسخ‌گویی منظم.",
+        deadline: new Date("2026-10-10T20:30:00.000Z"),
+        status: "PUBLISHED",
+        publishedAt: new Date()
+      }
+    });
+  }
 
-  await prisma.officeHourSession.create({
-    data: {
-      courseOfferingId: offering.id,
-      createdById: headTa.id,
-      hostId: headTa.id,
-      title: "جلسه رفع اشکال مدارهای الکتریکی ۱",
-      startsAt: new Date("2026-10-04T10:30:00.000Z"),
-      endsAt: new Date("2026-10-04T12:00:00.000Z"),
-      meetingUrl: "https://meet.google.com/abc-defg-hij",
-      status: "SCHEDULED"
-    }
-  });
+  const existingOfficeHour = await prisma.officeHourSession.findFirst({ where: { courseOfferingId: offering.id, title: "جلسه رفع اشکال مدارهای الکتریکی ۱" } });
+  if (!existingOfficeHour) {
+    await prisma.officeHourSession.create({
+      data: {
+        courseOfferingId: offering.id,
+        createdById: headTa.id,
+        hostId: headTa.id,
+        title: "جلسه رفع اشکال مدارهای الکتریکی ۱",
+        startsAt: new Date("2026-10-04T10:30:00.000Z"),
+        endsAt: new Date("2026-10-04T12:00:00.000Z"),
+        meetingUrl: "https://meet.google.com/abc-defg-hij",
+        status: "SCHEDULED"
+      }
+    });
+  }
 
 
 
@@ -205,27 +205,45 @@ async function main() {
     create: { gradeItemId: gradeItem.id, studentId: student.id, editedById: headTa.id, score: 18.5, feedback: "حل خوب و مرتب", status: "PUBLISHED", publishedAt: new Date() }
   });
 
-  await prisma.announcement.create({
-    data: { createdById: professor.id, courseOfferingId: offering.id, title: "تمدید مهلت ثبت درخواست TA", body: "مهلت ثبت درخواست تا پایان هفته تمدید شد.", priority: "important", publishedAt: new Date() }
-  });
+  const existingAnnouncement = await prisma.announcement.findFirst({ where: { courseOfferingId: offering.id, title: "تمدید مهلت ثبت درخواست TA" } });
+  if (!existingAnnouncement) {
+    await prisma.announcement.create({
+      data: { createdById: professor.id, courseOfferingId: offering.id, title: "تمدید مهلت ثبت درخواست TA", body: "مهلت ثبت درخواست تا پایان هفته تمدید شد.", priority: "important", publishedAt: new Date() }
+    });
+  }
 
-  await prisma.academicCalendarEvent.create({
-    data: { createdById: admin.id, semesterId: semester.id, title: "مهلت حذف اضطراری", startsAt: new Date("2026-11-20T00:00:00.000Z"), eventType: "deadline", isImportant: true }
-  });
+  const existingCalendarEvent = await prisma.academicCalendarEvent.findFirst({ where: { semesterId: semester.id, title: "مهلت حذف اضطراری" } });
+  if (!existingCalendarEvent) {
+    await prisma.academicCalendarEvent.create({
+      data: { createdById: admin.id, semesterId: semester.id, title: "مهلت حذف اضطراری", startsAt: new Date("2026-11-20T00:00:00.000Z"), eventType: "deadline", isImportant: true }
+    });
+  }
 
-  const thread = await prisma.messageThread.create({
-    data: { courseOfferingId: offering.id, createdById: student.id, type: "COURSE_GENERAL", subject: "سؤال درباره تمرین سری ۱", participants: { create: [{ userId: student.id }, { userId: headTa.id }] }, messages: { create: { senderId: student.id, body: "سلام، در سوال دوم تمرین سری ۱ نیاز به راهنمایی دارم." } } }
-  });
+  const existingThread = await prisma.messageThread.findFirst({ where: { courseOfferingId: offering.id, subject: "سؤال درباره تمرین سری ۱" } });
+  if (!existingThread) {
+    await prisma.messageThread.create({
+      data: { courseOfferingId: offering.id, createdById: student.id, type: "COURSE_GENERAL", subject: "سؤال درباره تمرین سری ۱", participants: { create: [{ userId: student.id }, { userId: headTa.id }] }, messages: { create: { senderId: student.id, body: "سلام، در سوال دوم تمرین سری ۱ نیاز به راهنمایی دارم." } } }
+    });
+  }
 
-  const survey = await prisma.survey.create({
-    data: { courseOfferingId: offering.id, createdById: professor.id, title: "ارزشیابی میان‌ترم TA", description: "بازخورد کوتاه درباره عملکرد TA", type: "TA_MIDTERM", isAnonymous: true, minResponses: 3, opensAt: new Date("2026-10-01T00:00:00.000Z"), closesAt: new Date("2026-12-01T00:00:00.000Z"), questions: { create: [{ text: "کیفیت توضیح TA را ارزیابی کنید.", type: "RATING", orderIndex: 0 }] } }
-  });
+  const existingSurvey = await prisma.survey.findFirst({ where: { courseOfferingId: offering.id, title: "ارزشیابی میان‌ترم TA" } });
+  if (!existingSurvey) {
+    await prisma.survey.create({
+      data: { courseOfferingId: offering.id, createdById: professor.id, title: "ارزشیابی میان‌ترم TA", description: "بازخورد کوتاه درباره عملکرد TA", type: "TA_MIDTERM", isAnonymous: true, minResponses: 3, opensAt: new Date("2026-10-01T00:00:00.000Z"), closesAt: new Date("2026-12-01T00:00:00.000Z"), questions: { create: [{ text: "کیفیت توضیح TA را ارزیابی کنید.", type: "RATING", orderIndex: 0 }] } }
+    });
+  }
 
-  await prisma.availabilityPoll.create({
-    data: { courseOfferingId: offering.id, createdById: headTa.id, title: "انتخاب زمان جلسه رفع اشکال", pollType: "OFFICE_HOUR_TIME", deadline: new Date("2026-10-02T20:30:00.000Z"), status: "OPEN", options: { create: [{ label: "شنبه ۱۴ تا ۱۵", orderIndex: 0 }, { label: "یکشنبه ۱۶ تا ۱۷", orderIndex: 1 }] } }
-  });
+  const existingPoll = await prisma.availabilityPoll.findFirst({ where: { courseOfferingId: offering.id, title: "انتخاب زمان جلسه رفع اشکال" } });
+  if (!existingPoll) {
+    await prisma.availabilityPoll.create({
+      data: { courseOfferingId: offering.id, createdById: headTa.id, title: "انتخاب زمان جلسه رفع اشکال", pollType: "OFFICE_HOUR_TIME", deadline: new Date("2026-10-02T20:30:00.000Z"), status: "OPEN", options: { create: [{ label: "شنبه ۱۴ تا ۱۵", orderIndex: 0 }, { label: "یکشنبه ۱۶ تا ۱۷", orderIndex: 1 }] } }
+    });
+  }
 
-  await prisma.notification.create({ data: { userId: student.id, type: "ANNOUNCEMENT", title: "اطلاعیه جدید درس", body: "تمدید مهلت ثبت درخواست TA", href: "/announcements" } });
+  const existingNotification = await prisma.notification.findFirst({ where: { userId: student.id, title: "اطلاعیه جدید درس" } });
+  if (!existingNotification) {
+    await prisma.notification.create({ data: { userId: student.id, type: "ANNOUNCEMENT", title: "اطلاعیه جدید درس", body: "تمدید مهلت ثبت درخواست TA", href: "/announcements" } });
+  }
 
   console.log({ admin: admin.email, professor: professor.email, student: student.email, headTa: headTa.email, password: "Admin@12345678", courseOfferingId: offering.id });
 }

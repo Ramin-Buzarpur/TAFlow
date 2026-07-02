@@ -14,7 +14,7 @@ import { passwordResetEmail } from "@/server/email/templates";
 export async function requestPasswordReset(input: unknown) {
   const data = parseInput(forgotPasswordSchema, input);
   const meta = await getRequestMeta();
-  const limiter = checkRateLimit(makeRateLimitKey("forgot-password", meta.ipAddress, data.email), 4, 60 * 60 * 1000);
+  const limiter = await checkRateLimit(makeRateLimitKey("forgot-password", meta.ipAddress, data.email), 4, 60 * 60 * 1000);
   if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many password reset attempts", 429);
 
   const user = await db.user.findUnique({ where: { email: data.email }, select: { id: true, email: true, status: true } });

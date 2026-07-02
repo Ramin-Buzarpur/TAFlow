@@ -55,13 +55,15 @@ export async function issueCertificate(actorId: string, requestId: string) {
     return c;
   });
 
+  const verificationUrl = `${process.env.AUTH_URL || "http://localhost:3000"}/certificates/verify/${trackingCode}`;
   const pdfBuffer = await renderCertificatePdf({
     name: request.requester.name || request.requester.email,
     role: request.role,
     course: request.courseOffering.course.title,
     semester: request.courseOffering.semester.title,
     trackingCode,
-    issuedAt: cert.issuedAt
+    issuedAt: cert.issuedAt,
+    verificationUrl
   });
   const pdfFile = await uploadFile(request.userId, {
     buffer: pdfBuffer,
@@ -74,6 +76,30 @@ export async function issueCertificate(actorId: string, requestId: string) {
   await notifyUser({ userId: request.userId, type: "CERTIFICATE", title: "گواهی شما صادر شد", body: trackingCode, href: `/certificates/${cert.id}` });
   await writeAuditLog({ actorId, action: "ISSUE", entityType: "TACertificate", entityId: cert.id, courseOfferingId: request.courseOfferingId, afterJson: { trackingCode } });
   return { ...cert, pdfFileId: pdfFile.id, verificationToken };
+}
+
+export async function revokeCertificate(actorId: string, certificateId: string, reason: string) {
+  const cert = await db.tACertificate.findUnique({ where: { id: certificateId }, include: { request: true } });
+  if (!cert) throw new AppError("NOT_FOUND", "Certificate not found", 404);
+  if (cert.revokedAt) throw new AppError("ALREADY_REVOKED", "Certificate is already revoked", 409);
+  await requireCoursePermission(actorId, cert.request.courseOfferingId, coursePermissions.APPROVE_CERTIFICATE);
+  const revoked = await db.tACertificate.update({ where: { id: certificateId }, data: { revokedAt: new Date(), revokedById: actorId, revokeReason: reason } });
+  await notifyUser({ userId: cert.request.userId, type: "CERTIFICATE", title: "گواهی شما ابطال شد", body: reason, href: `/certificates` });
+  await writeAuditLog({ actorId, action: "REVOKE", entityType: "TACertificate", entityId: certificateId, courseOfferingId: cert.request.courseOfferingId, metadata: { reason } });
+  return revoked;
+}
+
+export async function issueCertificatesBulk(actorId: string, requestIds: string[]) {
+  const results: { requestId: string; ok: boolean; error?: string }[] = [];
+  for (const requestId of requestIds) {
+    try {
+      await issueCertificate(actorId, requestId);
+      results.push({ requestId, ok: true });
+    } catch (error) {
+      results.push({ requestId, ok: false, error: error instanceof AppError ? error.message : "Unknown error" });
+    }
+  }
+  return results;
 }
 
 export async function listMyCertificates(userId: string) {

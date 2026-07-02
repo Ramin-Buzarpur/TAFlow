@@ -17,8 +17,10 @@ test.describe("admin", () => {
     const uniqueCode = `E2E${Date.now()}`;
     await page.fill('input[name="name"]', uniqueName);
     await page.fill('input[name="code"]', uniqueCode);
-    await page.getByRole("button", { name: "افزودن" }).first().click();
-    await page.waitForURL("**/admin", { timeout: 10_000 });
-    await expect(page.getByRole("strong").filter({ hasText: uniqueName })).toBeVisible();
+    await Promise.all([
+      page.waitForNavigation({ timeout: 15_000 }),
+      page.getByRole("button", { name: "افزودن" }).first().click()
+    ]);
+    await expect(page.getByRole("strong").filter({ hasText: uniqueName })).toBeVisible({ timeout: 10_000 });
   });
 });

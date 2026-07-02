@@ -52,37 +52,39 @@ export async function assignCourseRole(actorId: string, input: unknown): Promise
   if (!offering) throw new AppError("COURSE_OFFERING_NOT_FOUND", "Course offering was not found", 404);
 
   const assignment = await db.$transaction(async (tx) => {
-    const created = await tx.courseRoleAssignment.upsert({
-      where: {
-        courseOfferingId_userId_role: {
-          courseOfferingId: data.courseOfferingId,
-          userId: data.userId,
-          role: data.role
-        }
-      },
-      update: {
-        permissionsJson: data.permissions ?? undefined,
-        activeFrom: data.activeFrom ?? undefined,
-        activeUntil: data.activeUntil ?? null,
-        assignedById: actorId,
-        assignmentSource: data.assignmentSource,
-        note: data.note,
-        revokedAt: null,
-        revokedById: null,
-        revokeReason: null
-      },
-      create: {
-        courseOfferingId: data.courseOfferingId,
-        userId: data.userId,
-        role: data.role,
-        permissionsJson: data.permissions ?? undefined,
-        activeFrom: data.activeFrom ?? new Date(),
-        activeUntil: data.activeUntil,
-        assignedById: actorId,
-        assignmentSource: data.assignmentSource,
-        note: data.note
-      }
+    // No single-key upsert here: the active-row-per-triple invariant is a
+    // partial unique index (WHERE "revokedAt" IS NULL), not a plain unique
+    // constraint, so a prior revoke must leave its row untouched as history
+    // and a fresh assignment must become a new row.
+    const activeExisting = await tx.courseRoleAssignment.findFirst({
+      where: { courseOfferingId: data.courseOfferingId, userId: data.userId, role: data.role, revokedAt: null }
     });
+
+    const created = activeExisting
+      ? await tx.courseRoleAssignment.update({
+          where: { id: activeExisting.id },
+          data: {
+            permissionsJson: data.permissions ?? undefined,
+            activeFrom: data.activeFrom ?? undefined,
+            activeUntil: data.activeUntil ?? null,
+            assignedById: actorId,
+            assignmentSource: data.assignmentSource,
+            note: data.note
+          }
+        })
+      : await tx.courseRoleAssignment.create({
+          data: {
+            courseOfferingId: data.courseOfferingId,
+            userId: data.userId,
+            role: data.role,
+            permissionsJson: data.permissions ?? undefined,
+            activeFrom: data.activeFrom ?? new Date(),
+            activeUntil: data.activeUntil,
+            assignedById: actorId,
+            assignmentSource: data.assignmentSource,
+            note: data.note
+          }
+        });
 
     if (data.role === "STUDENT") {
       await tx.courseEnrollment.upsert({
