@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { StatusBadge, Badge } from "@/components/ui";
+import { StatusBadge, Badge } from "@/components/primitives";
 import { useToast } from "@/components/toast";
 
 type Applicant = {

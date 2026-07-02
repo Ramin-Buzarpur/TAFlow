@@ -87,11 +87,17 @@ export async function assignCourseRole(actorId: string, input: unknown): Promise
         });
 
     if (data.role === "STUDENT") {
-      await tx.courseEnrollment.upsert({
-        where: { courseOfferingId_studentId: { courseOfferingId: data.courseOfferingId, studentId: data.userId } },
-        update: { droppedAt: null, source: "role-assignment" },
-        create: { courseOfferingId: data.courseOfferingId, studentId: data.userId, source: "role-assignment" }
+      // Same reasoning as the active-role lookup above: the active-enrollment
+      // invariant is a partial unique index (WHERE "droppedAt" IS NULL), so a
+      // prior drop must stay as history and a re-enrollment becomes a new row.
+      const activeEnrollment = await tx.courseEnrollment.findFirst({
+        where: { courseOfferingId: data.courseOfferingId, studentId: data.userId, droppedAt: null }
       });
+      if (!activeEnrollment) {
+        await tx.courseEnrollment.create({
+          data: { courseOfferingId: data.courseOfferingId, studentId: data.userId, source: "role-assignment" }
+        });
+      }
     }
 
     await tx.auditLog.create({

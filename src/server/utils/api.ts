@@ -1,5 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { AppError } from "@/server/errors";
 
 export function ok<T>(data: T, init?: { status?: number }) {
@@ -13,6 +14,9 @@ export function created<T>(data: T) {
 export function fail(error: unknown, fallbackMessage = "Request failed") {
   if (error instanceof AppError) {
     return NextResponse.json({ error: error.code, message: error.message, details: error.details }, { status: error.status });
+  }
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    return NextResponse.json({ error: "CONFLICT", message: "This item already exists or conflicts with an existing one" }, { status: 409 });
   }
   if (error instanceof Error) {
     return NextResponse.json({ error: "INVALID_REQUEST", message: error.message || fallbackMessage }, { status: 400 });

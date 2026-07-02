@@ -87,3 +87,16 @@ export async function checkRateLimit(key: string, limit: number, windowMs: numbe
 export function makeRateLimitKey(scope: string, ...parts: Array<string | null | undefined>): string {
   return [scope, ...parts.map((part) => part?.trim().toLowerCase() || "unknown")].join(":");
 }
+
+// Returns null when REDIS_URL isn't configured (in-memory fallback is active
+// by design, not a failure), true/false when it is configured and reachable/not.
+export async function checkRedisHealth(): Promise<boolean | null> {
+  const client = getRedisClient();
+  if (!client) return null;
+  try {
+    await client.ping();
+    return true;
+  } catch {
+    return false;
+  }
+}

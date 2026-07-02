@@ -113,17 +113,11 @@ async function main() {
     }
   });
 
-  const offering = await prisma.courseOffering.upsert({
-    where: {
-      courseId_semesterId_professorId_section: {
-        courseId: course.id,
-        semesterId: semester.id,
-        professorId: professor.id,
-        section: "01"
-      }
-    },
-    update: {},
-    create: {
+  const existingOffering = await prisma.courseOffering.findFirst({
+    where: { courseId: course.id, semesterId: semester.id, professorId: professor.id, section: "01" }
+  });
+  const offering = existingOffering ?? await prisma.courseOffering.create({
+    data: {
       courseId: course.id,
       semesterId: semester.id,
       professorId: professor.id,
@@ -143,11 +137,12 @@ async function main() {
   await ensureActiveCourseRole(professor.id, "PROFESSOR", admin.id);
   await ensureActiveCourseRole(headTa.id, "HEAD_TA", professor.id);
 
-  await prisma.courseEnrollment.upsert({
-    where: { courseOfferingId_studentId: { courseOfferingId: offering.id, studentId: student.id } },
-    update: {},
-    create: { courseOfferingId: offering.id, studentId: student.id }
+  const existingEnrollment = await prisma.courseEnrollment.findFirst({
+    where: { courseOfferingId: offering.id, studentId: student.id, droppedAt: null }
   });
+  if (!existingEnrollment) {
+    await prisma.courseEnrollment.create({ data: { courseOfferingId: offering.id, studentId: student.id } });
+  }
 
   await ensureActiveCourseRole(student.id, "STUDENT", admin.id);
 

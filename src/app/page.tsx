@@ -6,6 +6,7 @@ import { TextFlip } from "@/components/marketing/text-flip";
 import { AnimatedCounter } from "@/components/marketing/animated-counter";
 import { Reveal } from "@/components/marketing/reveal";
 import { AosProvider } from "@/components/marketing/aos-provider";
+import { Mascot } from "@/components/marketing/mascot";
 
 export default function HomePage() {
   const features = [
@@ -31,6 +32,7 @@ export default function HomePage() {
     <Topbar/><CommandPalette/>
     <main className="shell">
       <section className="hero">
+        <div className="hero-blobs"><span/><span/><span/></div>
         <div>
           <Badge tone="blue">نسخه یکپارچه full-stack</Badge>
           <h1>سامانه هوشمند مدیریت <TextFlip words={["دستیاران آموزشی", "TAFlow", "Head TA", "Gradebook", "گواهی TA"]}/></h1>
@@ -49,11 +51,12 @@ export default function HomePage() {
             <Card><h3>وضعیت انتخاب</h3><p><Badge tone="purple">مصاحبه</Badge> <Badge tone="green">منتخب</Badge></p></Card>
           </div>
         </div>
+        <Mascot pose="point" className="hero-mascot"/>
       </section>
 
       <section className="grid grid-3" style={{ marginTop: 24 }}>
         {features.map(([title, text], i) => <Reveal key={title} delay={i * 0.05}>
-          <Card><span className="iconbox"/><h3>{title}</h3><p className="muted">{text}</p></Card>
+          <Card className="feature-card"><span className="iconbox"/><h3>{title}</h3><p className="muted">{text}</p></Card>
         </Reveal>)}
       </section>
 
@@ -83,12 +86,15 @@ export default function HomePage() {
             <div className="list-row">AuditLog کامل برای عملیات حساس</div>
           </div>
         </Card>
-        <Card>
+        <Card style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+          <Mascot pose="celebrate" size={90}/>
+          <div style={{ flex: 1, minWidth: 220 }}>
           <h2>آماده شروع هستید؟</h2>
           <p className="muted">همین حالا با یکی از حساب‌های نمونه وارد شوید یا فرصت‌های TA فعال را ببینید.</p>
           <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
             <Link className="btn btn-primary" href="/login">ورود</Link>
             <Link className="btn" href="/opportunities">فرصت‌های TA</Link>
+          </div>
           </div>
         </Card>
       </section>

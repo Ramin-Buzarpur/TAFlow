@@ -26,10 +26,10 @@ export async function submitProfessorEvaluation(studentId: string, input: {
   ratingResources: number;
   comment?: string;
 }) {
-  const enrollment = await db.courseEnrollment.findUnique({
-    where: { courseOfferingId_studentId: { courseOfferingId: input.courseOfferingId, studentId } }
+  const enrollment = await db.courseEnrollment.findFirst({
+    where: { courseOfferingId: input.courseOfferingId, studentId, droppedAt: null }
   });
-  if (!enrollment || enrollment.droppedAt) throw new PermissionError("Only enrolled students can evaluate the professor of this course");
+  if (!enrollment) throw new PermissionError("Only enrolled students can evaluate the professor of this course");
 
   const hash = respondentHash(studentId, input.courseOfferingId, "professor-eval");
   const existing = await db.professorEvaluation.findFirst({ where: { courseOfferingId: input.courseOfferingId, respondentHash: hash } });

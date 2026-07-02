@@ -5,6 +5,7 @@ import { AppError, PermissionError } from "@/server/errors";
 import { coursePermissions } from "@/server/auth/permissions";
 import { canAccessCourseOffering, requireCoursePermission } from "@/server/services/rbac";
 import { writeAuditLog } from "@/server/services/audit";
+import { checkRateLimit, makeRateLimitKey } from "@/server/auth/rate-limit";
 
 function respondentHash(userId: string, surveyId: string) {
   return crypto.createHash("sha256").update(`${userId}:${surveyId}:${process.env.AUTH_SECRET || "dev"}`).digest("hex");
@@ -23,6 +24,8 @@ export async function listSurveys(actorId: string, courseOfferingId: string) {
 }
 
 export async function submitSurveyAnswer(actorId: string, surveyId: string, answers: { questionId: string; valueJson: unknown }[]) {
+  const limiter = await checkRateLimit(makeRateLimitKey("survey-answer", actorId), 30, 60 * 60 * 1000);
+  if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many survey submissions", 429);
   const survey = await db.survey.findUnique({ where: { id: surveyId }, include: { questions: true } });
   if (!survey) throw new AppError("NOT_FOUND", "Survey not found", 404);
   if (!(await canAccessCourseOffering(actorId, survey.courseOfferingId))) throw new PermissionError();
@@ -50,9 +53,23 @@ export async function createAvailabilityPoll(actorId: string, input: { courseOff
 }
 
 export async function votePoll(actorId: string, pollId: string, optionId: string) {
+  const limiter = await checkRateLimit(makeRateLimitKey("poll-vote", actorId), 60, 60 * 60 * 1000);
+  if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many votes", 429);
   const poll = await db.availabilityPoll.findUnique({ where: { id: pollId } });
   if (!poll) throw new AppError("NOT_FOUND", "Poll not found", 404);
   if (!(await canAccessCourseOffering(actorId, poll.courseOfferingId))) throw new PermissionError();
   if (poll.status !== "OPEN" || poll.deadline < new Date()) throw new AppError("POLL_CLOSED", "Poll is closed", 409);
-  return db.pollVote.upsert({ where: { pollId_voterId: { pollId, voterId: actorId } }, create: { pollId, optionId, voterId: actorId, respondentHash: poll.isAnonymous ? respondentHash(actorId, pollId) : null }, update: { optionId } });
+
+  if (poll.isAnonymous) {
+    // Anonymous votes must not store the real voterId, or the "anonymous"
+    // vote is trivially linkable to the user via this same row. Dedupe by
+    // respondentHash instead (backed by a partial unique index in the DB).
+    const hash = respondentHash(actorId, pollId);
+    const existing = await db.pollVote.findFirst({ where: { pollId, respondentHash: hash } });
+    return existing
+      ? db.pollVote.update({ where: { id: existing.id }, data: { optionId } })
+      : db.pollVote.create({ data: { pollId, optionId, voterId: null, respondentHash: hash } });
+  }
+
+  return db.pollVote.upsert({ where: { pollId_voterId: { pollId, voterId: actorId } }, create: { pollId, optionId, voterId: actorId, respondentHash: null }, update: { optionId } });
 }

@@ -8,6 +8,7 @@ import { writeAuditLog } from "@/server/services/audit";
 import { notifyUser } from "@/server/services/notifications";
 import { uploadFile } from "@/server/services/files";
 import { renderCertificatePdf } from "@/server/certificates/pdf";
+import { checkRateLimit, makeRateLimitKey } from "@/server/auth/rate-limit";
 
 function code() { return crypto.randomBytes(8).toString("hex").toUpperCase(); }
 function hash(value: string) { return crypto.createHash("sha256").update(value).digest("hex"); }
@@ -20,10 +21,22 @@ export async function getCertificateEligibility(userId: string, courseOfferingId
   return { eligible: Boolean(assignment), checks: [{ key: "role", label: "نقش فعال در درس", passed: Boolean(assignment) }, { key: "activityReports", label: "گزارش فعالیت", passed: reports > 0, value: reports }, { key: "sessions", label: "جلسات ثبت‌شده", passed: sessions > 0, value: sessions }] };
 }
 
+const CERTIFICATE_REQUEST_IN_FLIGHT = ["DRAFT", "SUBMITTED", "PROFESSOR_APPROVED", "EDUCATION_APPROVED", "ISSUED"] as const;
+
 export async function requestCertificate(actorId: string, input: { courseOfferingId: string; role: "TA" | "HEAD_TA" }) {
+  const limiter = await checkRateLimit(makeRateLimitKey("certificate-request", actorId), 10, 60 * 60 * 1000);
+  if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many certificate requests", 429);
   const eligibility = await getCertificateEligibility(actorId, input.courseOfferingId, input.role);
   if (!eligibility.eligible) throw new AppError("CERTIFICATE_INELIGIBLE", "User is not eligible for this certificate", 409, eligibility);
-  const request = await db.certificateRequest.upsert({ where: { userId_courseOfferingId_role: { userId: actorId, courseOfferingId: input.courseOfferingId, role: input.role } }, create: { userId: actorId, courseOfferingId: input.courseOfferingId, role: input.role, status: "SUBMITTED" }, update: { status: "SUBMITTED", rejectionReason: null } });
+  // No single-key upsert: a REJECTED/REVOKED request must stay as history,
+  // not get silently reset back to SUBMITTED (same reasoning as
+  // course-roles.ts's active-role lookup). Only an in-flight request blocks
+  // a new one.
+  const inFlight = await db.certificateRequest.findFirst({
+    where: { userId: actorId, courseOfferingId: input.courseOfferingId, role: input.role, status: { in: [...CERTIFICATE_REQUEST_IN_FLIGHT] } }
+  });
+  if (inFlight) throw new AppError("CERTIFICATE_REQUEST_IN_FLIGHT", "You already have a request in progress for this course/role", 409);
+  const request = await db.certificateRequest.create({ data: { userId: actorId, courseOfferingId: input.courseOfferingId, role: input.role, status: "SUBMITTED" } });
   await writeAuditLog({ actorId, action: "CREATE", entityType: "CertificateRequest", entityId: request.id, courseOfferingId: input.courseOfferingId, afterJson: request });
   return request;
 }
