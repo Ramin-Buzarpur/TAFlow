@@ -50,6 +50,8 @@ export async function upsertGradeRecord(actorId: string, input: { gradeItemId: s
   if (!item) throw new AppError("NOT_FOUND", "Grade item not found", 404);
   await requireCoursePermission(actorId, item.courseOfferingId, coursePermissions.EDIT_ASSIGNED_GRADES);
 
+  if (item.lockedAt) throw new AppError("GRADE_ITEM_LOCKED", "این آیتم نمره قفل شده است؛ برای ویرایش ابتدا قفل را باز کنید", 409);
+
   if (item.assigneeId && item.assigneeId !== actorId) {
     const user = await db.user.findUnique({ where: { id: actorId }, select: { globalRole: true } });
     const roles = await getCourseRoleNames(actorId, item.courseOfferingId);
@@ -123,6 +125,19 @@ export async function commitGradeImport(actorId: string, gradeItemId: string, ro
   return results;
 }
 
+// Toggle: the same endpoint locks an open item and unlocks a locked one.
+// While locked, upsertGradeRecord (and therefore Excel import commit) and
+// regrade score changes are all rejected with GRADE_ITEM_LOCKED.
+export async function toggleGradeItemLock(actorId: string, gradeItemId: string) {
+  const item = await db.gradeItem.findUnique({ where: { id: gradeItemId } });
+  if (!item) throw new AppError("NOT_FOUND", "Grade item not found", 404);
+  await requireCoursePermission(actorId, item.courseOfferingId, coursePermissions.MANAGE_GRADEBOOK);
+  const lockedAt = item.lockedAt ? null : new Date();
+  const updated = await db.gradeItem.update({ where: { id: gradeItemId }, data: { lockedAt } });
+  await writeAuditLog({ actorId, action: "UPDATE", entityType: "GradeItem", entityId: gradeItemId, courseOfferingId: item.courseOfferingId, beforeJson: { lockedAt: item.lockedAt }, afterJson: { lockedAt } });
+  return updated;
+}
+
 export async function publishGradeItem(actorId: string, gradeItemId: string) {
   const item = await db.gradeItem.findUnique({ where: { id: gradeItemId }, include: { records: true } });
   if (!item) throw new AppError("NOT_FOUND", "Grade item not found", 404);
@@ -175,8 +190,11 @@ export async function submitAssignment(actorId: string, gradeItemId: string, fil
     update: { fileId, note, submittedAt: new Date() },
     include: { file: { select: { id: true, originalName: true } } }
   });
-  await writeAuditLog({ actorId, action: "UPDATE", entityType: "AssignmentSubmission", entityId: submission.id, courseOfferingId: item.courseOfferingId, afterJson: submission });
-  return submission;
+  // Late submissions are accepted but flagged (standard LMS behavior) —
+  // "late" is derived from dueAt vs submittedAt, no stored flag to drift.
+  const late = Boolean(item.dueAt && submission.submittedAt > item.dueAt);
+  await writeAuditLog({ actorId, action: "UPDATE", entityType: "AssignmentSubmission", entityId: submission.id, courseOfferingId: item.courseOfferingId, afterJson: submission, metadata: { late } });
+  return { ...submission, late };
 }
 
 export async function createRegradeRequest(actorId: string, input: { gradeRecordId: string; reason: string }) {
@@ -199,6 +217,7 @@ export async function respondToRegradeRequest(actorId: string, requestId: string
 
   const updated = await db.$transaction(async (tx) => {
     if (input.status === "APPROVED" && typeof input.newScore === "number") {
+      if (request.gradeRecord.gradeItem.lockedAt) throw new AppError("GRADE_ITEM_LOCKED", "این آیتم نمره قفل شده است؛ برای اصلاح نمره ابتدا قفل را باز کنید", 409);
       if (input.newScore > Number(request.gradeRecord.gradeItem.maxScore)) throw new AppError("INVALID_SCORE", "Score cannot exceed max score", 422);
       const previous = request.gradeRecord;
       await tx.gradeRecord.update({ where: { id: request.gradeRecordId }, data: { score: input.newScore, editedById: actorId } });

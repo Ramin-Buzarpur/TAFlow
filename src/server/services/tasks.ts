@@ -36,8 +36,11 @@ export async function submitTask(actorId: string, taskId: string, fileId: string
     update: { fileId, note, submittedAt: new Date() },
     include: { file: { select: { id: true, originalName: true } } }
   });
-  await writeAuditLog({ actorId, action: "UPDATE", entityType: "TaskSubmission", entityId: submission.id, courseOfferingId: task.courseOfferingId, afterJson: submission });
-  return submission;
+  // Late deliveries are accepted but flagged, same policy as assignment
+  // submissions — derived from dueAt, not stored.
+  const late = Boolean(task.dueAt && submission.submittedAt > task.dueAt);
+  await writeAuditLog({ actorId, action: "UPDATE", entityType: "TaskSubmission", entityId: submission.id, courseOfferingId: task.courseOfferingId, afterJson: submission, metadata: { late } });
+  return { ...submission, late };
 }
 
 export async function updateTaskStatus(actorId: string, taskId: string, status: TaskStatus) {

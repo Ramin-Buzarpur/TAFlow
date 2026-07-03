@@ -29,6 +29,16 @@ export const createTAOpportunitySchema = z.object({
   deadline: dateTimeSchema,
   selectionRubric: z.record(z.string(), z.unknown()).optional(),
   formConfig: formConfigSchema.optional()
+}).superRefine((value, ctx) => {
+  // An opportunity whose window opens after its own deadline can never
+  // accept an application — reject it at creation instead of letting it
+  // sit published-but-unusable.
+  if (value.opensAt && value.opensAt >= value.deadline) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["opensAt"], message: "زمان شروع دریافت درخواست باید قبل از مهلت پایان باشد" });
+  }
+  if (value.deadline <= new Date()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "مهلت درخواست باید در آینده باشد" });
+  }
 });
 
 export const submitTAApplicationSchema = z.object({

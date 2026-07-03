@@ -14,7 +14,11 @@ export function DeliverableSubmit({ endpoint, currentFileName }: { endpoint: str
   async function submit(fileId: string, fileName: string) {
     const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileId }) });
     const json = await res.json();
-    if (res.ok) { toast.show(`تحویل ثبت شد: ${fileName}`, "success"); setOpen(false); router.refresh(); }
+    if (res.ok) {
+      if (json.late) toast.show(`تحویل با تاخیر ثبت شد: ${fileName} — مهلت این مورد گذشته بود.`, "error");
+      else toast.show(`تحویل ثبت شد: ${fileName}`, "success");
+      setOpen(false); router.refresh();
+    }
     else toast.show(json.message || "خطا در ثبت تحویل", "error");
   }
 

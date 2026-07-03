@@ -12,7 +12,7 @@ export default async function GradesPage(){const session=await auth(); if(!sessi
         <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
           <div><strong>{a.title}</strong><p className="muted">{a.courseOffering.course.title} — موعد: {new Date(a.dueAt!).toLocaleDateString("fa-IR")}</p></div>
         </div>
-        {a.submission ? <p className="muted" style={{ fontSize: 13 }}>آخرین تحویل: {a.submission.file.originalName}</p> : null}
+        {a.submission ? <p className="muted" style={{ fontSize: 13 }}>آخرین تحویل: {a.submission.file.originalName}{a.dueAt && a.submission.submittedAt > a.dueAt ? <span style={{ marginInlineStart: 8, fontSize: 11, fontWeight: 800, color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "2px 8px" }}>دیرکرد</span> : null}</p> : null}
         <DeliverableSubmit endpoint={`/api/gradebook/items/${a.id}/submit`} currentFileName={a.submission?.file.originalName}/>
       </div>)}</div> : <p className="muted">تکلیفی با مهلت تحویل ثبت نشده است.</p>}
     </Card>

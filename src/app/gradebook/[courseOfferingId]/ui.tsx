@@ -20,6 +20,23 @@ export function GradebookForms({ courseOfferingId }: { courseOfferingId: string 
   </form>;
 }
 
+export function GradeItemLockToggle({ itemId, locked }: { itemId: string; locked: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  const toast = useToast();
+  async function toggle() {
+    setBusy(true);
+    const res = await fetch(`/api/gradebook/items/${itemId}/lock`, { method: "POST" });
+    const json = await res.json();
+    setBusy(false);
+    if (res.ok) { toast.show(json.lockedAt ? "آیتم قفل شد؛ نمرات آن دیگر قابل ویرایش نیستند." : "قفل آیتم باز شد.", "success"); router.refresh(); }
+    else toast.show(json.message || "خطا در تغییر وضعیت قفل", "error");
+  }
+  return <button className="btn" disabled={busy} onClick={toggle} title={locked ? "باز کردن قفل" : "قفل کردن نمرات"} style={{ padding: "4px 10px", fontSize: 12 }}>
+    {locked ? "🔒 قفل" : "🔓 باز"}
+  </button>;
+}
+
 type PreviewRow = { row: number; studentNumber: string; score: number | null; status: "ok" | "error"; message?: string; studentId?: string };
 
 export function GradeImportPanel({ items }: { items: { id: string; title: string }[] }) {

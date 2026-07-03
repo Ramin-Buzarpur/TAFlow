@@ -1,0 +1,1111 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[top=2.2cm,bottom=2.2cm,left=2.2cm,right=2.2cm]{geometry}
+\usepackage{xepersian}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{framed}
+\usepackage{listings}
+\settextfont{DejaVu Sans}
+\setlatintextfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
+\linespread{1.35}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue}
+\pagestyle{fancy}
+\fancyhf{}
+\setlength{\headheight}{15pt}
+\rhead{طرح توسعه ماژول‌های جدید برای TAFlow}
+\lhead{}
+\cfoot{\thepage}
+\setlist[itemize]{topsep=4pt,itemsep=3pt,parsep=2pt,rightmargin=16pt}
+\setlist[enumerate]{topsep=4pt,itemsep=3pt,parsep=2pt,rightmargin=16pt}
+\titleformat{\section}{\Large\bfseries\color{blue!55!black}}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\large\bfseries\color{blue!40!black}}{\thesubsection}{0.8em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{black}}{\thesubsubsection}{0.8em}{}
+\newcommand{\eng}[1]{\lr{\texttt{\detokenize{#1}}}}
+\newenvironment{importantbox}{\begin{framed}\noindent\bfseries}{\end{framed}}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,columns=fullflexible,frame=single}
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+{\Huge\bfseries طرح کامل توسعه سه ماژول جدید برای TAFlow\par}
+\vspace{0.6cm}
+{\Large استخدام، رویدادها و مسابقات، انجمن‌های علمی\par}
+\vspace{1.2cm}
+{\large سند نیازمندی، طراحی محصول، معماری فنی، فیلترها، پنل‌ها، تست‌ها و پرامپت آماده برای Claude\par}
+\vfill
+{\large تهیه‌شده برای توسعه پروژه \eng{TAFlow}\par}
+\vspace{0.5cm}
+{\large \today\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{هدف سند}
+این سند برای اضافه کردن سه بخش بزرگ و محصول‌محور به پروژه \eng{TAFlow} نوشته شده است:
+\begin{enumerate}
+\item بخش استخدامی‌ها و فرصت‌های شغلی/دانشگاهی، شامل فرصت‌های داخل دانشگاه و شرکت‌های بیرون دانشگاه.
+\item بخش رویدادها، مسابقات، همایش‌ها، ورکشاپ‌ها و برنامه‌های آموزشی یا رقابتی.
+\item بخش انجمن‌های علمی دانشگاه‌ها، شامل مدیریت اعضا، برنامه‌ها، محتوا، انتخابات، پروژه‌ها و گزارش‌ها.
+\end{enumerate}
+هدف این است که \eng{TAFlow} از یک سامانه مدیریت دستیار آموزشی، به یک پلتفرم جامع دانشگاهی برای ارتباط دانشجو، استاد، آموزش، شرکت‌ها، انجمن‌ها و برگزارکنندگان رویداد تبدیل شود.
+
+\begin{importantbox}
+نکته مهم: طراحی این سه ماژول باید با معماری فعلی پروژه هماهنگ باشد؛ یعنی از همان الگوی \eng{Next.js App Router}، \eng{Prisma/PostgreSQL}، \eng{RBAC}، \eng{AuditLog}، \eng{Notification}، \eng{UploadedFile}، \eng{Search}، \eng{Dashboard} و طراحی RTL فارسی استفاده شود.
+\end{importantbox}
+
+\section{اصول مشترک طراحی}
+قبل از ورود به هر ماژول، چند اصل باید در همه بخش‌ها رعایت شود:
+\begin{enumerate}
+\item هیچ تصمیم دسترسی فقط در فرانت‌اند گرفته نشود. همه مجوزها باید در سمت سرور بررسی شوند.
+\item هر عملیات حساس باید در \eng{AuditLog} ثبت شود.
+\item هر فایل آپلودی باید مالک، سطح دسترسی، نوع فایل، اندازه، \eng{checksum} و وضعیت حذف نرم داشته باشد.
+\item همه فرم‌ها باید با \eng{Zod} یا لایه اعتبارسنجی مشابه validate شوند.
+\item همه فیلترها باید قابل ترکیب باشند و pagination داشته باشند.
+\item همه لیست‌ها باید search، sort، filter، export و empty state داشته باشند.
+\item همه notificationها باید حداقل درون‌برنامه‌ای باشند و بعداً امکان email digest هم داشته باشند.
+\item تاریخ‌ها در دیتابیس به UTC ذخیره شوند و در UI با تقویم شمسی و timezone کاربر نمایش داده شوند.
+\item در فیلترهای استخدامی نباید فیلترهای تبعیض‌آمیز یا غیرقانونی مثل جنسیت، قومیت، مذهب یا وضعیت سلامت استفاده شود؛ مگر موردی که قانوناً برای یک موقعیت خاص الزامی و قابل توجیه باشد و توسط ادمین دانشگاه تایید شده باشد.
+\item برای هر ماژول باید تست واحد، تست integration، تست permission و تست e2e نوشته شود.
+\end{enumerate}
+
+\section{ماژول اول: بخش استخدامی‌ها و فرصت‌ها}
+
+\subsection{هدف ماژول استخدامی}
+این بخش باید یک \eng{Career / Opportunity Portal} داخل TAFlow باشد. دانشجوها بتوانند فرصت‌های دانشگاهی و بیرونی را ببینند، فیلتر کنند، رزومه بفرستند، وضعیت درخواست خود را دنبال کنند و نتیجه را همان‌جا دریافت کنند. از طرف دیگر دانشگاه و شرکت‌های بیرونی پنل مدیریتی جدا داشته باشند تا فرصت ثبت کنند، درخواست‌ها را بررسی کنند، مصاحبه بگذارند، یادداشت داخلی بنویسند و نتیجه نهایی را اعلام کنند.
+
+\subsection{نوع فرصت‌ها}
+فرصت‌ها باید چند نوع داشته باشند:
+\begin{enumerate}
+\item فرصت TA داخل دانشگاه.
+\item فرصت Head TA داخل دانشگاه.
+\item فرصت Research Assistant یا دستیار پژوهشی.
+\item فرصت Lab Assistant یا کمک آزمایشگاه.
+\item فرصت کارآموزی داخل دانشگاه.
+\item فرصت کارآموزی شرکت‌های بیرونی.
+\item فرصت شغلی پاره‌وقت.
+\item فرصت شغلی تمام‌وقت.
+\item فرصت پروژه‌ای یا freelance.
+\item فرصت بورسیه، گرنت، منتورینگ یا برنامه رشد استعداد.
+\item فرصت همکاری با انجمن علمی، مرکز رشد، آزمایشگاه یا پژوهشکده.
+\item فرصت همکاری در برگزاری رویداد، مسابقه یا همایش.
+\end{enumerate}
+
+\subsection{نقش‌های لازم در ماژول استخدامی}
+\begin{longtable}{p{0.25\textwidth}p{0.68\textwidth}}
+\toprule
+\textbf{نقش} & \textbf{توضیح و دسترسی‌ها}\\
+\midrule
+دانشجو & مشاهده فرصت‌ها، فیلتر کردن، ساخت پروفایل شغلی، ارسال رزومه، مشاهده وضعیت، پیام با کارفرما در صورت مجاز بودن.\\
+فارغ‌التحصیل & مشابه دانشجو، اما با محدودیت یا اجازه جدا براساس سیاست دانشگاه.\\
+استاد & ثبت فرصت دانشگاهی، بررسی داوطلبان، دعوت به مصاحبه، ثبت نتیجه، تایید همکاری.\\
+مدیر آموزش/ادمین دانشگاه & تایید فرصت‌های دانشگاهی، تایید شرکت‌ها، مدیریت دسته‌بندی‌ها، گزارش‌گیری و نظارت.\\
+نماینده شرکت & ساخت فرصت بیرونی، مشاهده رزومه‌ها، فیلتر داوطلبان، تغییر وضعیت درخواست، ارسال نتیجه.\\
+ادمین شرکت & مدیریت پروفایل شرکت، مدیریت recruiterها، مشاهده گزارش‌های شرکت، کنترل فرصت‌های منتشرشده.\\
+ناظر سیستم & audit، moderation، رسیدگی به گزارش تخلف، کنترل دسترسی‌ها.\\
+\bottomrule
+\end{longtable}
+
+\subsection{فیلترهای کامل فرصت‌ها}
+فیلترهای این بخش باید هم برای دانشجو و هم برای شرکت/دانشگاه قابل استفاده باشند.
+
+\subsubsection{فیلترهای عمومی}
+\begin{enumerate}
+\item نوع فرصت: TA، Head TA، کارآموزی، شغل، پروژه، پژوهش، رویداد، بورسیه.
+\item منبع فرصت: دانشگاه، دپارتمان، استاد، شرکت بیرونی، انجمن علمی، مرکز رشد.
+\item وضعیت انتشار: draft، pending approval، published، closed، cancelled، archived.
+\item تاریخ انتشار.
+\item مهلت ارسال درخواست.
+\item تاریخ شروع.
+\item مدت همکاری.
+\item برچسب‌ها.
+\item سطح فوریت.
+\item تاییدشده توسط دانشگاه یا تاییدنشده.
+\end{enumerate}
+
+\subsubsection{فیلترهای مربوط به شرکت یا سازمان}
+\begin{enumerate}
+\item نام شرکت یا واحد دانشگاهی.
+\item نوع سازمان: دانشگاهی، خصوصی، دولتی، استارتاپ، پژوهشگاه، NGO، مرکز رشد.
+\item صنعت: نرم‌افزار، برق، هوش مصنوعی، آموزش، پزشکی، مالی، صنعتی، پژوهشی و غیره.
+\item اندازه سازمان: کوچک، متوسط، بزرگ.
+\item وضعیت تایید شرکت توسط دانشگاه.
+\item محل شرکت.
+\item امکان همکاری حضوری، دورکاری یا hybrid.
+\item سابقه همکاری قبلی با دانشگاه.
+\item امتیاز یا اعتبار شرکت در سیستم، در صورت اضافه شدن rating.
+\end{enumerate}
+
+\subsubsection{فیلترهای مربوط به دانشجو}
+این فیلترها برای شرکت/استاد هنگام بررسی داوطلبان استفاده می‌شود:
+\begin{enumerate}
+\item رشته تحصیلی.
+\item مقطع: کارشناسی، کارشناسی ارشد، دکتری.
+\item ترم تحصیلی یا سال ورود.
+\item معدل کل، در صورت مجاز بودن نمایش.
+\item نمره درس‌های مرتبط.
+\item مهارت‌ها و تکنولوژی‌ها.
+\item زبان‌ها.
+\item سابقه TA.
+\item سابقه پروژه.
+\item سابقه کارآموزی.
+\item سابقه شرکت در مسابقات.
+\item availability هفتگی.
+\item محل سکونت یا امکان حضور در محل، بدون نمایش داده حساس غیرضروری.
+\item وضعیت رزومه کامل یا ناقص.
+\item portfolio، GitHub، LinkedIn، وب‌سایت شخصی.
+\end{enumerate}
+
+\subsubsection{فیلترهای مربوط به خود فرصت}
+\begin{enumerate}
+\item paid یا unpaid.
+\item بازه حقوق/پرداخت.
+\item نوع قرارداد: کارآموزی، پاره‌وقت، تمام‌وقت، پروژه‌ای، داوطلبانه.
+\item ساعت کاری هفتگی.
+\item ظرفیت پذیرش.
+\item سطح تجربه: beginner، junior، mid، senior، بدون سابقه.
+\item مهارت‌های الزامی.
+\item مهارت‌های امتیازی.
+\item نیاز به مصاحبه.
+\item نیاز به آزمون فنی.
+\item نیاز به portfolio.
+\item نیاز به recommendation letter.
+\item امکان صدور گواهی.
+\item امکان تبدیل کارآموزی به استخدام.
+\item امکان ثبت به‌صورت تیمی یا فقط فردی.
+\end{enumerate}
+
+\subsection{پروفایل رزومه دانشجو}
+هر دانشجو باید یک پروفایل شغلی/رزومه‌ای داشته باشد. این پروفایل باید جدا از پروفایل آموزشی ساده باشد اما بتواند از داده‌های آموزشی استفاده کند.
+
+\subsubsection{اجزای پروفایل رزومه}
+\begin{enumerate}
+\item اطلاعات پایه: نام، ایمیل دانشگاهی، رشته، مقطع، ورودی.
+\item خلاصه معرفی کوتاه.
+\item مهارت‌ها.
+\item زبان‌ها.
+\item پروژه‌ها.
+\item تجربه TA یا Head TA.
+\item تجربه کاری یا کارآموزی.
+\item مسابقات و افتخارات.
+\item درس‌های مهم گذرانده‌شده.
+\item فایل رزومه PDF.
+\item لینک GitHub، LinkedIn، portfolio.
+\item نمونه کارها.
+\item گواهی‌ها.
+\item preference برای نوع فرصت: دورکاری، حضوری، حوزه تخصصی، ساعت کاری.
+\item وضعیت visibility: خصوصی، فقط دانشگاه، شرکت‌های تاییدشده، عمومی برای فرصت‌های apply شده.
+\end{enumerate}
+
+\subsection{فرآیند ارسال درخواست}
+\begin{enumerate}
+\item دانشجو فرصت را از لیست مشاهده می‌کند.
+\item فرصت را با فیلترهای لازم پیدا می‌کند.
+\item جزئیات فرصت را باز می‌کند.
+\item سیستم eligibility اولیه را بررسی می‌کند.
+\item دانشجو رزومه، cover letter، فایل‌ها و پاسخ سوال‌های اختصاصی را ارسال می‌کند.
+\item درخواست با وضعیت \eng{SUBMITTED} ثبت می‌شود.
+\item شرکت/دانشگاه درخواست را بررسی می‌کند.
+\item وضعیت به \eng{UNDER_REVIEW} یا \eng{SHORTLISTED} تغییر می‌کند.
+\item در صورت نیاز، مصاحبه یا آزمون ثبت می‌شود.
+\item نتیجه نهایی به \eng{ACCEPTED}، \eng{REJECTED}، \eng{WAITLISTED} یا \eng{WITHDRAWN} تغییر می‌کند.
+\item دانشجو notification دریافت می‌کند.
+\item نتیجه و توضیح قابل مشاهده می‌شود.
+\end{enumerate}
+
+\subsection{وضعیت‌های پیشنهادی درخواست استخدامی}
+\begin{longtable}{p{0.28\textwidth}p{0.64\textwidth}}
+\toprule
+\textbf{وضعیت} & \textbf{معنی}\\
+\midrule
+\eng{DRAFT} & درخواست توسط دانشجو شروع شده ولی هنوز ارسال نشده است.\\
+\eng{SUBMITTED} & درخواست ارسال شده است.\\
+\eng{UNDER_REVIEW} & شرکت یا دانشگاه در حال بررسی است.\\
+\eng{SHORTLISTED} & داوطلب وارد لیست کوتاه شده است.\\
+\eng{ASSESSMENT_SENT} & آزمون یا task برای داوطلب ارسال شده است.\\
+\eng{INTERVIEW_INVITED} & دعوت به مصاحبه انجام شده است.\\
+\eng{INTERVIEW_COMPLETED} & مصاحبه انجام شده است.\\
+\eng{OFFERED} & پیشنهاد همکاری ارسال شده است.\\
+\eng{ACCEPTED} & درخواست پذیرفته شده است.\\
+\eng{REJECTED} & درخواست رد شده است.\\
+\eng{WAITLISTED} & داوطلب در لیست انتظار است.\\
+\eng{WITHDRAWN} & دانشجو درخواست خود را پس گرفته است.\\
+\eng{EXPIRED} & مهلت یا فرصت تمام شده است.\\
+\bottomrule
+\end{longtable}
+
+\subsection{پنل مدیریتی شرکت‌ها}
+پنل شرکت‌ها باید با پنل دانشگاه متفاوت باشد. شرکت نباید به داده‌های عمومی دانشگاه یا اطلاعات غیرمرتبط دانشجوها دسترسی داشته باشد. دسترسی شرکت فقط به فرصت‌های خودش و درخواست‌هایی باشد که برای همان فرصت‌ها ارسال شده‌اند.
+
+\subsubsection{امکانات پنل شرکت}
+\begin{enumerate}
+\item ثبت و ویرایش پروفایل شرکت.
+\item آپلود لوگو و اطلاعات رسمی.
+\item ثبت آدرس، وب‌سایت، حوزه فعالیت و توضیحات شرکت.
+\item ارسال درخواست تایید به دانشگاه.
+\item مدیریت recruiterها و اعضای تیم شرکت.
+\item ساخت فرصت جدید.
+\item ذخیره فرصت به‌صورت draft.
+\item ارسال فرصت برای تایید دانشگاه.
+\item مشاهده فرصت‌های active، pending، closed، archived.
+\item مشاهده لیست applicantها.
+\item فیلتر applicantها براساس رشته، مهارت، مقطع، وضعیت، معدل، تجربه، availability.
+\item مشاهده رزومه و فایل‌های ارسال‌شده فقط برای applicantهای همان فرصت.
+\item نوشتن note داخلی برای هر applicant.
+\item tagگذاری applicant.
+\item تغییر وضعیت application.
+\item دعوت به مصاحبه.
+\item ثبت نتیجه مصاحبه.
+\item ارسال پیام یا اطلاعیه به applicant.
+\item ارسال offer.
+\item رد درخواست با reason داخلی و reason قابل نمایش برای دانشجو.
+\item export محدود applicantها با audit.
+\item مشاهده گزارش تعداد درخواست‌ها، نرخ پذیرش، وضعیت فرصت‌ها.
+\end{enumerate}
+
+\subsection{پنل مدیریتی دانشگاه برای فرصت‌ها}
+\begin{enumerate}
+\item تایید یا رد شرکت‌های بیرونی.
+\item بررسی مدارک شرکت.
+\item تایید فرصت‌های بیرونی قبل از انتشار.
+\item مدیریت دسته‌بندی فرصت‌ها.
+\item مدیریت گزارش تخلف.
+\item مشاهده audit شرکت‌ها و recruiterها.
+\item غیرفعال‌کردن شرکت یا فرصت مشکوک.
+\item تعیین سیاست نمایش رزومه.
+\item تعیین اینکه کدام دانشجویان یا فارغ‌التحصیلان مجاز به apply هستند.
+\item گزارش‌گیری از تعداد فرصت‌ها، تعداد درخواست‌ها، شرکت‌های فعال، استخدام‌های موفق.
+\item مدیریت template پیام‌ها و وضعیت‌ها.
+\end{enumerate}
+
+\subsection{مدل‌های دیتابیس پیشنهادی برای ماژول استخدامی}
+\begin{longtable}{p{0.28\textwidth}p{0.64\textwidth}}
+\toprule
+\textbf{مدل} & \textbf{کاربرد}\\
+\midrule
+\eng{Organization} & نگهداری شرکت‌ها، واحدهای دانشگاهی، پژوهشگاه‌ها، انجمن‌ها و برگزارکنندگان.\\
+\eng{OrganizationMember} & اتصال کاربران به سازمان با نقش recruiter، admin، reviewer.\\
+\eng{Opportunity} & خود فرصت استخدامی/دانشگاهی/پروژه‌ای.\\
+\eng{OpportunityRequirement} & مهارت‌ها، شرایط و پیش‌نیازهای فرصت.\\
+\eng{CareerProfile} & پروفایل رزومه‌ای دانشجو.\\
+\eng{ResumeDocument} & نسخه‌های مختلف رزومه یا فایل‌های شغلی.\\
+\eng{OpportunityApplication} & درخواست دانشجو برای فرصت.\\
+\eng{ApplicationAnswer} & پاسخ به سوال‌های اختصاصی هر فرصت.\\
+\eng{ApplicationReview} & نظر، امتیاز و note reviewer.\\
+\eng{ApplicationInterview} & اطلاعات مصاحبه یا آزمون.\\
+\eng{ApplicationStatusHistory} & تاریخچه وضعیت‌ها.\\
+\eng{ApplicationOffer} & پیشنهاد همکاری و پاسخ دانشجو.\\
+\eng{CompanyVerificationRequest} & درخواست تایید شرکت توسط دانشگاه.\\
+\bottomrule
+\end{longtable}
+
+\subsection{APIهای پیشنهادی ماژول استخدامی}
+\begin{LTR}
+\begin{lstlisting}
+GET    /api/opportunities
+POST   /api/opportunities
+GET    /api/opportunities/[id]
+PATCH  /api/opportunities/[id]
+POST   /api/opportunities/[id]/publish
+POST   /api/opportunities/[id]/close
+POST   /api/opportunities/[id]/apply
+GET    /api/opportunities/[id]/applications
+PATCH  /api/applications/[id]/status
+POST   /api/applications/[id]/review
+POST   /api/applications/[id]/interview
+POST   /api/applications/[id]/offer
+POST   /api/applications/[id]/withdraw
+GET    /api/career/profile
+PATCH  /api/career/profile
+POST   /api/career/resumes
+GET    /api/organizations
+POST   /api/organizations
+PATCH  /api/organizations/[id]
+POST   /api/organizations/[id]/verify
+POST   /api/organizations/[id]/members
+DELETE /api/organizations/[id]/members/[userId]
+\end{lstlisting}
+\end{LTR}
+
+\subsection{صفحات UI پیشنهادی}
+\begin{enumerate}
+\item \eng{/opportunities}: لیست فرصت‌ها با فیلتر کامل.
+\item \eng{/opportunities/[id]}: صفحه جزئیات فرصت.
+\item \eng{/opportunities/[id]/apply}: فرم ارسال درخواست.
+\item \eng{/my/applications}: وضعیت درخواست‌های من.
+\item \eng{/career/profile}: پروفایل رزومه‌ای دانشجو.
+\item \eng{/company/dashboard}: داشبورد شرکت.
+\item \eng{/company/opportunities}: فرصت‌های شرکت.
+\item \eng{/company/opportunities/[id]/applications}: applicant pipeline.
+\item \eng{/admin/organizations}: تایید و مدیریت سازمان‌ها.
+\item \eng{/admin/opportunities}: moderation فرصت‌ها.
+\end{enumerate}
+
+\subsection{تست‌های لازم برای ماژول استخدامی}
+\begin{enumerate}
+\item دانشجو بتواند فرصت منتشرشده را ببیند.
+\item دانشجو نتواند فرصت draft را ببیند.
+\item شرکت فقط applicantهای فرصت خودش را ببیند.
+\item شرکت نتواند رزومه دانشجویانی را ببیند که apply نکرده‌اند.
+\item شرکت تاییدنشده نتواند فرصت منتشر کند.
+\item فرصت بیرونی قبل از تایید دانشگاه منتشر نشود.
+\item دانشجو نتواند بعد از deadline درخواست بدهد.
+\item یک دانشجو نتواند برای یک فرصت چند application فعال بسازد.
+\item تغییر وضعیت application باید audit شود.
+\item export applicantها باید permission و audit داشته باشد.
+\item فیلترها باید همزمان کار کنند.
+\item جستجو باید pagination داشته باشد.
+\item فایل رزومه فقط با signed URL قابل دانلود باشد.
+\item پیام نتیجه باید برای دانشجو قابل مشاهده باشد.
+\item rejected reason داخلی نباید به دانشجو نمایش داده شود؛ مگر فیلد جداگانه publicReason باشد.
+\end{enumerate}
+
+\subsection{مراحل پیاده‌سازی ماژول استخدامی}
+\begin{enumerate}
+\item تعریف enumها: نوع فرصت، وضعیت فرصت، وضعیت application، نوع سازمان، نقش عضو سازمان.
+\item اضافه کردن مدل‌های Prisma.
+\item نوشتن migration و constraintهای ضروری.
+\item ساخت service layer برای opportunity، organization، application و career profile.
+\item ساخت permissionها و guardها.
+\item ساخت API routeها.
+\item ساخت UI لیست فرصت‌ها با search/filter/sort/pagination.
+\item ساخت فرم apply و upload رزومه.
+\item ساخت داشبورد شرکت و applicant pipeline.
+\item ساخت پنل admin برای تایید شرکت و فرصت.
+\item اضافه کردن notification و audit.
+\item نوشتن unit test و e2e test.
+\item اجرای build و رفع خطاها.
+\end{enumerate}
+
+\section{ماژول دوم: رویدادها، مسابقات، همایش‌ها و برنامه‌ها}
+
+\subsection{هدف ماژول رویدادها}
+این بخش باید یک مرکز کامل برای اعلام، ثبت‌نام، مدیریت و گزارش‌گیری رویدادهای دانشگاهی و بیرونی باشد. رویداد می‌تواند مسابقه کدنویسی، هکاتون، همایش علمی، کارگاه آموزشی، نشست تخصصی، دوره کوتاه‌مدت، مسابقه مربوط به سایر دروس، نمایشگاه، سمینار، جشنواره، Bootcamp یا جلسه انجمن علمی باشد.
+
+\subsection{نوع رویدادها}
+\begin{enumerate}
+\item مسابقه کدنویسی.
+\item هکاتون.
+\item مسابقه درسی یا علمی.
+\item همایش.
+\item سمینار.
+\item ورکشاپ.
+\item وبینار.
+\item bootcamp.
+\item نمایشگاه پروژه.
+\item رویداد انجمن علمی.
+\item رویداد شرکت‌ها در دانشگاه.
+\item رویداد استخدامی یا career day.
+\item جلسه معرفی مسیر شغلی.
+\item دوره آموزشی کوتاه‌مدت.
+\item چالش پژوهشی.
+\end{enumerate}
+
+\subsection{نقش‌های رویداد}
+\begin{longtable}{p{0.25\textwidth}p{0.68\textwidth}}
+\toprule
+\textbf{نقش} & \textbf{دسترسی‌ها}\\
+\midrule
+برگزارکننده اصلی & ساخت رویداد، مدیریت زمان‌بندی، مدیریت ثبت‌نام‌ها، مدیریت staff، گزارش‌گیری.\\
+ادمین دانشگاه & تایید رویداد، کنترل محتوا، مشاهده گزارش، غیرفعال‌سازی رویداد.\\
+انجمن علمی & ساخت رویداد انجمنی، مدیریت اعضای تیم اجرایی، گزارش فعالیت.\\
+شرکت بیرونی & ساخت رویداد بیرونی با تایید دانشگاه، مدیریت ثبت‌نام‌ها در محدوده مجاز.\\
+دانشجو شرکت‌کننده & ثبت‌نام، ساخت تیم، ارسال فایل یا پاسخ، دریافت گواهی.\\
+Staff یا داوطلب برگزاری & ثبت درخواست همکاری، دریافت task، check-in، گزارش کار.\\
+داور & مشاهده submissionها، امتیازدهی، ثبت نظر.\\
+منتور & راهنمایی تیم‌ها، ثبت بازخورد، حضور در زمان‌بندی.\\
+سخنران & مدیریت اطلاعات سخنرانی، فایل‌ها و زمان ارائه.\\
+اسپانسر & نمایش اطلاعات اسپانسر و گزارش محدود.\\
+\bottomrule
+\end{longtable}
+
+\subsection{فیلترهای رویدادها}
+\begin{enumerate}
+\item نوع رویداد.
+\item حضوری، آنلاین یا hybrid.
+\item تاریخ شروع و پایان.
+\item مهلت ثبت‌نام.
+\item برگزارکننده.
+\item دپارتمان یا دانشکده.
+\item موضوع یا حوزه علمی.
+\item سطح: مقدماتی، متوسط، پیشرفته.
+\item ویژه دانشجویان خاص یا عمومی.
+\item ظرفیت.
+\item رایگان یا پولی.
+\item دارای گواهی یا بدون گواهی.
+\item دارای جایزه یا بدون جایزه.
+\item فردی یا تیمی.
+\item نیازمند تایید ثبت‌نام یا ثبت‌نام آزاد.
+\item امکان ثبت‌نام به عنوان participant.
+\item امکان ثبت‌نام به عنوان staff.
+\item امکان ثبت‌نام به عنوان judge، mentor یا speaker.
+\item زبان رویداد.
+\item برچسب‌های تکنولوژی یا درس.
+\end{enumerate}
+
+\subsection{فرآیند ایجاد رویداد}
+\begin{enumerate}
+\item برگزارکننده رویداد را به صورت draft ایجاد می‌کند.
+\item اطلاعات پایه، پوستر، نوع رویداد، زمان، مکان، ظرفیت و قوانین را وارد می‌کند.
+\item نقش‌های مجاز برای ثبت‌نام را تعیین می‌کند: شرکت‌کننده، staff، داور، منتور، سخنران.
+\item اگر رویداد نیاز به تایید دانشگاه دارد، به وضعیت pending approval می‌رود.
+\item ادمین دانشگاه آن را بررسی و تایید یا رد می‌کند.
+\item پس از تایید، رویداد منتشر می‌شود.
+\item دانشجوها یا افراد مجاز ثبت‌نام می‌کنند.
+\item برگزارکننده registrationها را بررسی می‌کند.
+\item پیش از رویداد notification و reminder ارسال می‌شود.
+\item در روز رویداد check-in انجام می‌شود.
+\item بعد از رویداد، feedback، attendance، گواهی و گزارش نهایی صادر می‌شود.
+\end{enumerate}
+
+\subsection{ثبت‌نام به عنوان شرکت‌کننده، Staff یا کمک برگزارکننده}
+این بخش باید flexible باشد. هر رویداد می‌تواند چند registration track داشته باشد:
+\begin{enumerate}
+\item شرکت‌کننده عادی.
+\item شرکت‌کننده تیمی.
+\item staff اجرایی.
+\item داوطلب کمک در برگزاری.
+\item منتور.
+\item داور.
+\item سخنران.
+\item عکاس/رسانه.
+\item مسئول ثبت‌نام و پذیرش.
+\item مسئول فنی و پشتیبانی.
+\end{enumerate}
+برای هر track باید فرم اختصاصی، ظرفیت، deadline و وضعیت تایید جدا تعریف شود.
+
+\subsection{وضعیت‌های ثبت‌نام رویداد}
+\begin{longtable}{p{0.28\textwidth}p{0.64\textwidth}}
+\toprule
+\textbf{وضعیت} & \textbf{معنی}\\
+\midrule
+\eng{REGISTERED} & ثبت‌نام اولیه انجام شده است.\\
+\eng{PENDING_REVIEW} & ثبت‌نام نیاز به بررسی دارد.\\
+\eng{APPROVED} & ثبت‌نام تایید شده است.\\
+\eng{REJECTED} & ثبت‌نام رد شده است.\\
+\eng{WAITLISTED} & فرد در لیست انتظار است.\\
+\eng{CHECKED_IN} & فرد در روز رویداد حضور یافته است.\\
+\eng{NO_SHOW} & ثبت‌نام کرده ولی حضور پیدا نکرده است.\\
+\eng{CANCELLED} & ثبت‌نام لغو شده است.\\
+\eng{CERTIFICATE_ISSUED} & گواهی صادر شده است.\\
+\bottomrule
+\end{longtable}
+
+\subsection{امکانات اختصاصی مسابقات}
+برای مسابقات، مخصوصاً مسابقات کدنویسی یا درسی، امکانات زیر لازم است:
+\begin{enumerate}
+\item تعریف قوانین مسابقه.
+\item ثبت‌نام فردی یا تیمی.
+\item ساخت تیم و دعوت عضو.
+\item تایید تیم توسط برگزارکننده.
+\item تعریف problem/task/challenge.
+\item زمان شروع و پایان مسابقه.
+\item ارسال پاسخ یا فایل.
+\item اتصال اختیاری به judge بیرونی برای مسابقات کدنویسی.
+\item scoreboard عمومی یا خصوصی.
+\item freeze کردن scoreboard در زمان مشخص.
+\item داوری دستی یا خودکار.
+\item ثبت امتیاز، penalty و رتبه.
+\item تعریف جایزه‌ها.
+\item اعلام برنده‌ها.
+\item صدور گواهی شرکت یا رتبه.
+\item گزارش نهایی مسابقه.
+\end{enumerate}
+
+\subsection{امکانات همایش و کنفرانس}
+\begin{enumerate}
+\item ثبت سخنران.
+\item برنامه زمان‌بندی چندبخشی.
+\item سالن‌ها یا اتاق‌های مختلف.
+\item ثبت مقاله، poster یا abstract.
+\item داوری مقاله.
+\item ساخت agenda.
+\item check-in با QR.
+\item صدور certificate حضور.
+\item ثبت sponsor.
+\item صفحه معرفی سخنرانان.
+\item فایل‌های رویداد.
+\item feedback بعد از هر session.
+\end{enumerate}
+
+\subsection{مدل‌های دیتابیس پیشنهادی برای رویدادها}
+\begin{longtable}{p{0.28\textwidth}p{0.64\textwidth}}
+\toprule
+\textbf{مدل} & \textbf{کاربرد}\\
+\midrule
+\eng{Event} & اطلاعات اصلی رویداد.\\
+\eng{EventTrack} & مسیر ثبت‌نام: participant، staff، judge، mentor و غیره.\\
+\eng{EventRegistration} & ثبت‌نام فرد یا کاربر برای یک track.\\
+\eng{EventTeam} & تیم‌های مسابقه یا هکاتون.\\
+\eng{EventTeamMember} & اعضای تیم.\\
+\eng{EventScheduleItem} & برنامه زمان‌بندی رویداد.\\
+\eng{EventStaffAssignment} & وظایف staff در رویداد.\\
+\eng{CompetitionProblem} & سوال یا چالش مسابقه.\\
+\eng{CompetitionSubmission} & ارسال پاسخ مسابقه.\\
+\eng{CompetitionScore} & امتیاز و نتیجه داوری.\\
+\eng{EventFeedback} & نظرسنجی و بازخورد رویداد.\\
+\eng{EventCertificate} & گواهی رویداد.\\
+\eng{EventSponsor} & اسپانسرهای رویداد.\\
+\bottomrule
+\end{longtable}
+
+\subsection{APIهای پیشنهادی رویدادها}
+\begin{LTR}
+\begin{lstlisting}
+GET    /api/events
+POST   /api/events
+GET    /api/events/[id]
+PATCH  /api/events/[id]
+POST   /api/events/[id]/publish
+POST   /api/events/[id]/approve
+POST   /api/events/[id]/register
+GET    /api/events/[id]/registrations
+PATCH  /api/event-registrations/[id]/status
+POST   /api/events/[id]/tracks
+POST   /api/events/[id]/teams
+POST   /api/event-teams/[id]/members
+POST   /api/events/[id]/schedule
+POST   /api/events/[id]/check-in
+POST   /api/events/[id]/feedback
+POST   /api/events/[id]/certificates/issue
+GET    /api/events/[id]/export
+\end{lstlisting}
+\end{LTR}
+
+\subsection{صفحات UI پیشنهادی رویدادها}
+\begin{enumerate}
+\item \eng{/events}: لیست رویدادها با فیلتر کامل.
+\item \eng{/events/[id]}: صفحه جزئیات رویداد.
+\item \eng{/events/[id]/register}: ثبت‌نام به عنوان participant یا staff.
+\item \eng{/events/[id]/teams}: تیم‌های رویداد.
+\item \eng{/events/[id]/schedule}: زمان‌بندی.
+\item \eng{/events/[id]/scoreboard}: جدول امتیاز مسابقه.
+\item \eng{/events/manage}: پنل برگزارکننده.
+\item \eng{/events/manage/[id]/registrations}: مدیریت ثبت‌نام‌ها.
+\item \eng{/events/manage/[id]/staff}: مدیریت staff.
+\item \eng{/events/manage/[id]/reports}: گزارش نهایی.
+\item \eng{/admin/events}: تایید و moderation رویدادها.
+\end{enumerate}
+
+\subsection{تست‌های لازم برای رویدادها}
+\begin{enumerate}
+\item رویداد draft برای کاربران عادی نمایش داده نشود.
+\item رویداد pending فقط برای برگزارکننده و ادمین قابل مشاهده باشد.
+\item دانشجو بتواند در track مجاز ثبت‌نام کند.
+\item اگر ظرفیت پر شد، ثبت‌نام وارد waitlist شود یا بسته شود.
+\item کاربر نتواند برای یک track چند بار ثبت‌نام فعال داشته باشد.
+\item برگزارکننده بتواند وضعیت ثبت‌نام را تغییر دهد.
+\item staff فقط taskهای خودش را ببیند.
+\item participant نتواند صفحه مدیریت رویداد را باز کند.
+\item check-in فقط برای approved registration ممکن باشد.
+\item گواهی فقط برای افراد حاضر یا واجد شرایط صادر شود.
+\item scoreboard فقط براساس سیاست رویداد نمایش داده شود.
+\item فایل‌های مسابقه فقط برای افراد مجاز قابل دانلود باشد.
+\end{enumerate}
+
+\subsection{مراحل پیاده‌سازی ماژول رویدادها}
+\begin{enumerate}
+\item تعریف مدل‌های Event، Track، Registration، Team، Schedule و Competition.
+\item تعریف enumهای event type، registration role، registration status، event status.
+\item ساخت migration و indexهای لازم.
+\item ساخت service layer برای event، registration، team، check-in، competition.
+\item ساخت permissionها برای organizer، admin، staff، judge، participant.
+\item ساخت API routeها.
+\item ساخت UI لیست و جزئیات رویداد.
+\item ساخت فرم ثبت‌نام با trackهای مختلف.
+\item ساخت پنل برگزارکننده.
+\item اضافه کردن check-in، feedback و certificate.
+\item نوشتن تست‌ها.
+\item اجرای typecheck، test و build.
+\end{enumerate}
+
+\section{ماژول سوم: انجمن‌های علمی دانشگاه}
+
+\subsection{هدف ماژول انجمن‌های علمی}
+این بخش باید امکان مدیریت کامل انجمن‌های علمی دانشگاه را بدهد. هر انجمن علمی بتواند پروفایل، اعضا، نقش‌ها، کمیته‌ها، رویدادها، پروژه‌ها، محتوا، انتخابات، گزارش فعالیت و ارتباط با دانشجویان را مدیریت کند. این بخش باید به ماژول رویدادها و فرصت‌ها متصل باشد؛ چون انجمن‌ها معمولاً رویداد برگزار می‌کنند، staff جذب می‌کنند، مسابقه می‌گذارند و با شرکت‌ها همکاری می‌کنند.
+
+\subsection{ساختار پیشنهادی انجمن علمی}
+\begin{enumerate}
+\item صفحه رسمی انجمن.
+\item معرفی، لوگو، حوزه فعالیت و اطلاعات تماس.
+\item لیست اعضای اصلی.
+\item کمیته‌ها: آموزشی، رویداد، رسانه، پژوهش، مالی، روابط عمومی، فنی.
+\item تقویم برنامه‌ها.
+\item اخبار و اطلاعیه‌ها.
+\item پروژه‌ها و کارگروه‌ها.
+\item فرم عضویت.
+\item فرصت همکاری در انجمن.
+\item انتخابات و رأی‌گیری.
+\item گزارش‌های دوره‌ای.
+\item گالری فایل و منابع.
+\item گزارش عملکرد سالانه.
+\end{enumerate}
+
+\subsection{نقش‌های انجمن علمی}
+\begin{longtable}{p{0.25\textwidth}p{0.68\textwidth}}
+\toprule
+\textbf{نقش} & \textbf{دسترسی‌ها}\\
+\midrule
+رئیس انجمن & مدیریت کلی انجمن، اعضا، رویدادها، گزارش‌ها و تنظیمات.\\
+نایب‌رئیس & مدیریت اجرایی با دسترسی محدودتر.\\
+دبیر & ثبت صورت‌جلسه، اطلاعیه‌ها، پیگیری برنامه‌ها.\\
+مسئول کمیته & مدیریت اعضا و taskهای کمیته.\\
+عضو فعال & شرکت در پروژه‌ها، دریافت task، کمک در رویدادها.\\
+عضو عادی & مشاهده اطلاعات، ثبت‌نام در برنامه‌ها، درخواست عضویت فعال.\\
+استاد مشاور & نظارت، تایید برنامه‌ها، ثبت نظر و تایید گزارش‌ها.\\
+ادمین دانشگاه & تایید انجمن، نظارت، گزارش‌گیری، آرشیو.\\
+\bottomrule
+\end{longtable}
+
+\subsection{امکانات اصلی انجمن‌های علمی}
+\begin{enumerate}
+\item ساخت انجمن توسط ادمین دانشگاه یا درخواست ایجاد انجمن.
+\item پروفایل عمومی انجمن.
+\item مدیریت اعضا و نقش‌ها.
+\item درخواست عضویت دانشجو.
+\item تایید یا رد درخواست عضویت.
+\item ایجاد کمیته‌های داخلی.
+\item مدیریت taskهای کمیته.
+\item ثبت رویداد توسط انجمن.
+\item اتصال مستقیم به ماژول رویدادها.
+\item ثبت فرصت همکاری در انجمن.
+\item اتصال به ماژول استخدامی/فرصت‌ها.
+\item انتشار اطلاعیه انجمن.
+\item انتشار پست، خبر یا مقاله کوتاه.
+\item ایجاد newsletter.
+\item مدیریت فایل‌ها و منابع آموزشی.
+\item ثبت صورت‌جلسه.
+\item ثبت بودجه یا هزینه‌ها در سطح ساده.
+\item مدیریت sponsor یا حامی.
+\item انتخابات انجمن.
+\item رأی‌گیری اعضا.
+\item گزارش عملکرد ماهانه/ترمی/سالانه.
+\item صدور گواهی همکاری برای اعضای فعال.
+\item صفحه دستاوردها.
+\item آرشیو دوره‌های مدیریتی انجمن.
+\end{enumerate}
+
+\subsection{فیلترها و جستجوی انجمن‌ها}
+\begin{enumerate}
+\item نام انجمن.
+\item دانشکده یا دپارتمان.
+\item حوزه فعالیت.
+\item وضعیت فعال/غیرفعال.
+\item تعداد اعضا.
+\item تعداد رویدادهای برگزارشده.
+\item دارای فرصت عضویت فعال.
+\item دارای رویدادهای آینده.
+\item دارای پروژه‌های فعال.
+\item استاد مشاور.
+\item سال تاسیس.
+\item برچسب‌ها.
+\end{enumerate}
+
+\subsection{فرآیند عضویت در انجمن}
+\begin{enumerate}
+\item دانشجو صفحه انجمن را مشاهده می‌کند.
+\item فرم عضویت را تکمیل می‌کند.
+\item انگیزه‌نامه، مهارت‌ها و حوزه علاقه را وارد می‌کند.
+\item درخواست با وضعیت \eng{PENDING} ثبت می‌شود.
+\item مسئول انجمن درخواست را بررسی می‌کند.
+\item وضعیت به \eng{APPROVED}، \eng{REJECTED} یا \eng{INTERVIEW_REQUIRED} تغییر می‌کند.
+\item در صورت تایید، نقش عضو عادی یا فعال به دانشجو داده می‌شود.
+\item در صورت فعالیت بیشتر، امکان ارتقا به کمیته‌ها یا مسئولیت‌ها وجود دارد.
+\end{enumerate}
+
+\subsection{انتخابات انجمن}
+انتخابات باید با دقت طراحی شود تا قابل اعتماد باشد:
+\begin{enumerate}
+\item تعریف انتخابات توسط ادمین دانشگاه یا استاد مشاور.
+\item تعیین سمت‌ها: رئیس، نایب‌رئیس، دبیر، مسئول کمیته.
+\item ثبت نامزدها.
+\item تایید صلاحیت نامزدها.
+\item تعیین رأی‌دهندگان مجاز.
+\item رأی‌گیری در بازه زمانی مشخص.
+\item جلوگیری از رأی duplicate.
+\item ثبت audit بدون افشای انتخاب افراد در صورت رأی محرمانه.
+\item اعلام نتایج.
+\item ثبت دوره مدیریتی جدید.
+\end{enumerate}
+
+\subsection{مدل‌های دیتابیس پیشنهادی برای انجمن‌ها}
+\begin{longtable}{p{0.28\textwidth}p{0.64\textwidth}}
+\toprule
+\textbf{مدل} & \textbf{کاربرد}\\
+\midrule
+\eng{ScientificAssociation} & اطلاعات اصلی انجمن.\\
+\eng{AssociationMember} & عضویت کاربران در انجمن.\\
+\eng{AssociationRole} & نقش‌ها و سمت‌های انجمن.\\
+\eng{AssociationCommittee} & کمیته‌های داخلی انجمن.\\
+\eng{AssociationMembershipRequest} & درخواست عضویت.\\
+\eng{AssociationPost} & اخبار، مطالب و اطلاعیه‌ها.\\
+\eng{AssociationProject} & پروژه‌ها و کارگروه‌ها.\\
+\eng{AssociationTask} & کارهای داخلی انجمن.\\
+\eng{AssociationMeeting} & جلسات انجمن.\\
+\eng{AssociationMeetingMinute} & صورت‌جلسه‌ها.\\
+\eng{AssociationElection} & انتخابات.\\
+\eng{AssociationCandidate} & نامزدهای انتخابات.\\
+\eng{AssociationVote} & رأی‌ها یا hash رأی‌ها.\\
+\eng{AssociationReport} & گزارش فعالیت.\\
+\eng{AssociationResource} & فایل‌ها و منابع.\\
+\bottomrule
+\end{longtable}
+
+\subsection{APIهای پیشنهادی انجمن‌ها}
+\begin{LTR}
+\begin{lstlisting}
+GET    /api/associations
+POST   /api/associations
+GET    /api/associations/[id]
+PATCH  /api/associations/[id]
+POST   /api/associations/[id]/join
+GET    /api/associations/[id]/members
+PATCH  /api/association-members/[id]/role
+POST   /api/associations/[id]/committees
+POST   /api/associations/[id]/posts
+POST   /api/associations/[id]/projects
+POST   /api/associations/[id]/tasks
+POST   /api/associations/[id]/meetings
+POST   /api/associations/[id]/elections
+POST   /api/association-elections/[id]/candidates
+POST   /api/association-elections/[id]/vote
+POST   /api/associations/[id]/reports
+GET    /api/associations/[id]/export
+\end{lstlisting}
+\end{LTR}
+
+\subsection{صفحات UI پیشنهادی انجمن‌ها}
+\begin{enumerate}
+\item \eng{/associations}: لیست انجمن‌ها.
+\item \eng{/associations/[id]}: صفحه عمومی انجمن.
+\item \eng{/associations/[id]/join}: درخواست عضویت.
+\item \eng{/associations/[id]/events}: رویدادهای انجمن.
+\item \eng{/associations/[id]/projects}: پروژه‌ها.
+\item \eng{/associations/[id]/posts}: اخبار و مطالب.
+\item \eng{/associations/manage}: پنل مدیریت انجمن برای مسئولان.
+\item \eng{/associations/manage/[id]/members}: مدیریت اعضا.
+\item \eng{/associations/manage/[id]/committees}: مدیریت کمیته‌ها.
+\item \eng{/associations/manage/[id]/elections}: انتخابات.
+\item \eng{/associations/manage/[id]/reports}: گزارش‌ها.
+\item \eng{/admin/associations}: پنل نظارت دانشگاه.
+\end{enumerate}
+
+\subsection{تست‌های لازم برای انجمن‌ها}
+\begin{enumerate}
+\item فقط ادمین یا مجازها بتوانند انجمن بسازند.
+\item دانشجو بتواند درخواست عضویت بدهد.
+\item دانشجو نتواند درخواست duplicate فعال بسازد.
+\item مسئول انجمن بتواند درخواست عضویت را بررسی کند.
+\item عضو عادی نتواند اعضا را مدیریت کند.
+\item مسئول کمیته فقط taskهای کمیته خودش را مدیریت کند.
+\item انتخابات خارج از بازه زمانی رأی نپذیرد.
+\item هر عضو مجاز فقط یک رأی بدهد.
+\item نتیجه رأی‌گیری فقط بعد از پایان نمایش داده شود.
+\item فایل‌های داخلی انجمن فقط برای اعضای مجاز قابل مشاهده باشد.
+\item گزارش‌های انجمن فقط برای مسئولان و ادمین دانشگاه قابل ویرایش باشد.
+\item رویداد ساخته‌شده توسط انجمن باید به ماژول Event متصل شود.
+\end{enumerate}
+
+\subsection{مراحل پیاده‌سازی ماژول انجمن‌ها}
+\begin{enumerate}
+\item تعریف مدل‌های انجمن، عضو، کمیته، پست، پروژه، جلسه، انتخابات و گزارش.
+\item تعریف enumهای نقش، وضعیت عضویت، وضعیت انتخابات و نوع محتوا.
+\item ساخت migration.
+\item ساخت service layer برای association، membership، committee، election و report.
+\item ساخت permissionها.
+\item ساخت API routeها.
+\item ساخت UI لیست انجمن‌ها و صفحه عمومی.
+\item ساخت پنل مدیریت انجمن.
+\item اتصال انجمن به رویدادها و فرصت‌ها.
+\item افزودن notification و audit.
+\item نوشتن تست‌ها.
+\item اجرای typecheck، test و build.
+\end{enumerate}
+
+\section{اتصال سه ماژول به هم}
+این سه بخش نباید جدا و بی‌ربط باشند. ارتباط پیشنهادی:
+\begin{enumerate}
+\item انجمن علمی بتواند رویداد بسازد.
+\item انجمن علمی بتواند فرصت همکاری یا staff جذب کند.
+\item شرکت بیرونی بتواند رویداد career یا workshop بسازد اما با تایید دانشگاه.
+\item رویداد بتواند staff از بین دانشجوها جذب کند؛ این جذب باید مثل یک فرصت قابل apply باشد.
+\item دانشجو در پروفایل خود سابقه شرکت در رویداد، staff بودن، عضویت انجمن و همکاری‌های دانشگاهی را داشته باشد.
+\item گواهی‌های رویداد و انجمن در پروفایل رزومه دانشجو قابل استفاده باشند.
+\item talent pool بتواند از داده‌های انجمن، رویداد، مسابقه، TA و پروژه‌ها برای پیشنهاد فرصت استفاده کند.
+\item notification و calendar بین همه ماژول‌ها مشترک باشد.
+\item search کلی سایت بتواند فرصت‌ها، رویدادها، انجمن‌ها و شرکت‌ها را پیدا کند.
+\item داشبورد دانشجو خلاصه‌ای از فرصت‌های جدید، رویدادهای آینده، انجمن‌های پیشنهادی و وضعیت درخواست‌ها نشان دهد.
+\end{enumerate}
+
+\section{طراحی داشبوردهای پیشنهادی}
+\subsection{داشبورد دانشجو}
+\begin{enumerate}
+\item فرصت‌های پیشنهادی براساس رشته و مهارت.
+\item درخواست‌های استخدامی اخیر.
+\item رویدادهای ثبت‌نام‌شده.
+\item رویدادهای پیشنهادی.
+\item انجمن‌های پیشنهادی.
+\item وضعیت عضویت در انجمن‌ها.
+\item گواهی‌های جدید.
+\item taskهای staff یا انجمن.
+\end{enumerate}
+
+\subsection{داشبورد شرکت}
+\begin{enumerate}
+\item فرصت‌های فعال.
+\item تعداد applicantها.
+\item applicantهای جدید.
+\item مصاحبه‌های آینده.
+\item وضعیت فرصت‌ها.
+\item عملکرد فرصت‌ها.
+\item پیام‌ها و notificationها.
+\end{enumerate}
+
+\subsection{داشبورد برگزارکننده رویداد}
+\begin{enumerate}
+\item رویدادهای فعال.
+\item تعداد ثبت‌نام participant.
+\item تعداد staff.
+\item ظرفیت باقی‌مانده.
+\item چک‌لیست آماده‌سازی.
+\item برنامه زمانی.
+\item feedbackها.
+\item گزارش نهایی.
+\end{enumerate}
+
+\subsection{داشبورد انجمن علمی}
+\begin{enumerate}
+\item اعضای جدید.
+\item درخواست‌های عضویت.
+\item رویدادهای آینده.
+\item taskهای باز.
+\item پست‌ها و اطلاعیه‌ها.
+\item انتخابات فعال.
+\item گزارش عملکرد.
+\end{enumerate}
+
+\section{امنیت، حریم خصوصی و سیاست‌ها}
+\begin{enumerate}
+\item شرکت‌ها فقط اطلاعات applicantهای خودشان را ببینند.
+\item نمایش معدل، شماره تماس، لینک رزومه و فایل‌ها باید با اجازه دانشجو یا سیاست دانشگاه باشد.
+\item دانلود رزومه باید audit شود.
+\item export داده‌ها باید محدود و audit شود.
+\item درخواست‌های استخدامی باید soft-delete یا archive داشته باشند، نه حذف کامل.
+\item اطلاعات داخلی review شرکت نباید به دانشجو نمایش داده شود.
+\item vote انجمن‌ها و نظرسنجی‌های حساس باید از respondentHash استفاده کنند.
+\item همه فایل‌های private با signed URL دانلود شوند.
+\item همه role changeها audit شوند.
+\item شرکت یا برگزارکننده متخلف باید قابل suspend باشد.
+\item همه APIهای mutation باید CSRF/origin check داشته باشند.
+\item rate limit برای apply، registration، join association، vote و upload لازم است.
+\end{enumerate}
+
+\section{اولویت‌بندی اجرایی}
+\subsection{فاز اول: زیرساخت مشترک}
+\begin{enumerate}
+\item تعریف مدل Organization به عنوان پایه مشترک شرکت، انجمن، دپارتمان و برگزارکننده.
+\item تعریف permissionهای جدید.
+\item تکمیل UploadedFile و signed URL.
+\item تکمیل Notification و AuditLog.
+\item افزودن search/filter/pagination استاندارد.
+\end{enumerate}
+
+\subsection{فاز دوم: استخدامی‌ها}
+\begin{enumerate}
+\item پیاده‌سازی فرصت‌ها.
+\item پیاده‌سازی پروفایل رزومه دانشجو.
+\item پیاده‌سازی apply و application status.
+\item پیاده‌سازی پنل شرکت.
+\item پیاده‌سازی پنل تایید دانشگاه.
+\end{enumerate}
+
+\subsection{فاز سوم: رویدادها}
+\begin{enumerate}
+\item پیاده‌سازی Event و Registration.
+\item پیاده‌سازی trackهای participant/staff/judge/mentor.
+\item پیاده‌سازی تیم‌ها و برنامه زمانی.
+\item پیاده‌سازی check-in و certificate.
+\item پیاده‌سازی مسابقه و scoreboard در نسخه بعدی.
+\end{enumerate}
+
+\subsection{فاز چهارم: انجمن‌های علمی}
+\begin{enumerate}
+\item پیاده‌سازی ScientificAssociation و Membership.
+\item پیاده‌سازی committee، post، project و task.
+\item اتصال انجمن‌ها به event و opportunity.
+\item پیاده‌سازی انتخابات و گزارش‌ها.
+\item پیاده‌سازی گواهی فعالیت انجمن.
+\end{enumerate}
+
+\section{پرامپت آماده برای Claude}
+متن زیر را می‌توان مستقیماً به Claude داد تا تغییرات را روی پروژه اعمال کند:
+
+\begin{LTR}
+\begin{lstlisting}
+You are working on the TAFlow repository. Extend the existing platform with three complete product modules: 1) Hiring and Opportunities, 2) Events / Competitions / Conferences, and 3) Scientific Associations.
+
+Important constraints:
+- Keep the current stack and architecture: Next.js App Router, TypeScript, Prisma, PostgreSQL, Auth.js/NextAuth, Zod validation, server-side RBAC, AuditLog, Notifications, UploadedFile, RTL Persian UI.
+- Do not create a separate unrelated app. Integrate everything into the current TAFlow architecture.
+- All permissions must be enforced on the server. The client must never be trusted for access decisions.
+- Add database constraints, service-layer validation, unit tests, integration tests, and e2e tests.
+- Keep the UI RTL-compatible and responsive.
+
+Module 1: Hiring and Opportunities
+Build a complete career/opportunity portal that supports both university opportunities and external company opportunities. Students must be able to search and filter opportunities, maintain a career profile, upload resumes, apply to opportunities, and track the application result inside TAFlow. Companies must have a separate management panel where they can create opportunities, review applicants, filter resumes, add internal notes, schedule interviews, update application statuses, and send final results.
+
+Required opportunity types:
+- Teaching Assistant
+- Head Teaching Assistant
+- Research Assistant
+- Lab Assistant
+- University internship
+- External company internship
+- Part-time job
+- Full-time job
+- Project/Freelance work
+- Scholarship / talent program
+- Association or event staff opportunity
+
+Required filters:
+- opportunity type, organization type, source, industry, department, field, skills, degree level, semester, GPA if allowed, course history, location, remote/hybrid/on-site, paid/unpaid, salary range, contract type, duration, weekly hours, deadline, start date, experience level, interview required, assessment required, certificate available, verified company, tags, status.
+
+Add company organization management:
+- Organization model
+- OrganizationMember model
+- Company verification workflow
+- Company dashboard
+- Recruiter roles
+- Opportunity moderation by university admin
+- Applicant pipeline
+- Resume access limited only to applicants of that company's opportunities
+- Audit all resume downloads and exports
+
+Add student career profile:
+- Skills, languages, projects, TA experience, internships, portfolio links, resume files, certificates, availability, visibility settings.
+
+Implement statuses:
+DRAFT, SUBMITTED, UNDER_REVIEW, SHORTLISTED, ASSESSMENT_SENT, INTERVIEW_INVITED, INTERVIEW_COMPLETED, OFFERED, ACCEPTED, REJECTED, WAITLISTED, WITHDRAWN, EXPIRED.
+
+Module 2: Events / Competitions / Conferences
+Build a complete event management module. Events can be coding contests, hackathons, academic competitions, workshops, seminars, conferences, webinars, bootcamps, career days, association events, or company events. Users must be able to register as participants, staff, helpers, judges, mentors, speakers, or volunteers depending on the event track.
+
+Required event features:
+- Event creation and approval workflow
+- Event type, date, location, online/hybrid, capacity, registration deadline, organizer, department, topic, level, tags
+- Multiple registration tracks: participant, staff, volunteer, judge, mentor, speaker, media, technical support
+- Track-specific forms, capacity, deadlines and approval rules
+- Registration statuses: REGISTERED, PENDING_REVIEW, APPROVED, REJECTED, WAITLISTED, CHECKED_IN, NO_SHOW, CANCELLED, CERTIFICATE_ISSUED
+- Team registration for hackathons and competitions
+- Event schedule / agenda
+- Check-in with QR or manual check-in
+- Feedback forms
+- Certificates
+- Staff assignments and tasks
+
+Competition-specific features:
+- Problems/challenges
+- Individual or team submissions
+- Manual or external judge integration
+- Scoreboard
+- Score freeze option
+- Winners and awards
+- Certificates for participation and ranking
+
+Conference-specific features:
+- Speakers
+- Sessions and rooms
+- Abstract/poster/paper submission if needed
+- Sponsors
+- Agenda
+- Attendance certificates
+
+Module 3: Scientific Associations
+Build a complete Scientific Associations module. Each scientific association must have a public profile, members, roles, committees, posts, events, projects, tasks, meetings, elections, reports, files, and certificates.
+
+Required association features:
+- Association profile: name, logo, department, description, contact, advisor professor
+- Membership request workflow
+- Member roles: president, vice president, secretary, committee lead, active member, regular member, advisor, university admin
+- Committees: education, events, media, research, finance, public relations, technical
+- Posts, announcements, newsletters
+- Projects and workgroups
+- Internal tasks
+- Meetings and meeting minutes
+- Events connected to the Event module
+- Opportunities connected to the Hiring module
+- Elections with candidates, eligible voters, voting window, duplicate vote prevention, result publication
+- Activity reports: monthly, semester, yearly
+- Certificates for active members and staff
+
+Cross-module integration:
+- Associations can create events.
+- Associations can publish opportunities for staff/helper roles.
+- Companies can create university-approved events.
+- Event staff recruitment can reuse the Opportunity/Application workflow.
+- Student career profiles should show event participation, staff roles, association membership, certificates, competitions and awards.
+- The global search should search opportunities, events, associations, companies, and posts.
+- Notifications and calendar integration must be shared across all modules.
+
+Implementation steps:
+1. Inspect the existing Prisma schema, services, API routes, RBAC, AuditLog, Notification and UploadedFile implementations.
+2. Design the new models in Prisma using existing naming conventions.
+3. Add enums and indexes.
+4. Add database constraints and partial unique indexes where needed.
+5. Create migrations.
+6. Implement service-layer logic with transaction safety.
+7. Add Zod schemas for every create/update/filter endpoint.
+8. Add API routes under /api/opportunities, /api/organizations, /api/events, /api/associations.
+9. Add role and permission checks.
+10. Add UI pages for student, company, organizer, association manager, and university admin.
+11. Add notifications and audit events.
+12. Add unit tests for services and validation.
+13. Add integration tests for permissions and database constraints.
+14. Add Playwright e2e tests for the main flows.
+15. Run pnpm typecheck, pnpm test, pnpm test:e2e and pnpm build.
+16. Fix all errors before finalizing.
+
+Acceptance criteria:
+- A student can create a career profile, find a filtered opportunity, apply, and track the result.
+- A verified company can create an opportunity, review applicants, schedule interviews, and send results.
+- University admin can verify companies and moderate opportunities.
+- A student can register for an event as participant or staff.
+- An organizer can approve registrations, assign staff, check in attendees, and issue certificates.
+- A competition can support teams, submissions and scoreboard.
+- A scientific association can manage members, committees, posts, events, elections and reports.
+- All private files require permission checks and signed URLs.
+- All sensitive operations are audited.
+- Unauthorized access is blocked server-side.
+- RTL UI, responsive layout, loading states, empty states and error states are implemented.
+\end{lstlisting}
+\end{LTR}
+
+\section{معیار پذیرش نهایی}
+برای اینکه این سه ماژول آماده تحویل باشند، باید موارد زیر پاس شوند:
+\begin{enumerate}
+\item \eng{pnpm typecheck} بدون خطا اجرا شود.
+\item \eng{pnpm test} بدون خطا اجرا شود.
+\item \eng{pnpm test:e2e} برای سناریوهای اصلی پاس شود.
+\item \eng{pnpm build} بدون خطا اجرا شود.
+\item دانشجو بتواند فرصت را فیلتر و apply کند.
+\item شرکت بتواند applicant را بررسی و نتیجه ثبت کند.
+\item ادمین دانشگاه بتواند شرکت و فرصت را تایید کند.
+\item رویداد بتواند participant و staff ثبت‌نام کند.
+\item برگزارکننده بتواند ثبت‌نام‌ها را مدیریت کند.
+\item انجمن علمی بتواند عضو، کمیته، رویداد، پست، انتخابات و گزارش داشته باشد.
+\item دسترسی‌ها در سرور enforce شوند.
+\item فایل‌ها و رزومه‌ها فقط برای افراد مجاز قابل دانلود باشند.
+\item همه عملیات حساس audit شوند.
+\item UI فارسی، RTL، responsive و دارای loading/empty/error state باشد.
+\end{enumerate}
+
+\end{document}

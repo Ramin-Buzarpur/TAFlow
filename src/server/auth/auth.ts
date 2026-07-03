@@ -11,6 +11,11 @@ import { verifyTotpCode } from "@/server/auth/totp";
 import { getRequestMeta } from "@/server/auth/request";
 import { jsonSafe } from "@/server/utils/json";
 
+// How stale a JWT session may be before it's re-checked against the user row.
+// This bounds how long a revoked/suspended account or a pre-password-change
+// session can keep working: at most this interval.
+const SESSION_REVALIDATE_MS = 60 * 1000;
+
 function sensitiveRoleNeeds2fa(globalRole: string) {
   if (process.env.AUTH_ENFORCE_2FA_FOR_STAFF !== "true") return false;
   return globalRole === "PROFESSOR" || globalRole === "EDUCATION_ADMIN" || globalRole === "SYSTEM_ADMIN";
@@ -189,6 +194,29 @@ export const authConfig = {
         token.globalRole = user.globalRole ?? "STUDENT";
         token.status = user.status ?? "PENDING_EMAIL";
         token.timezone = user.timezone ?? "Asia/Baku";
+        // Fixed at login and never rotated forward, so a password change at
+        // any later moment reliably invalidates this token — token.iat can't
+        // serve this purpose because it moves on session refresh.
+        token.authTime = Date.now();
+        token.revalidatedAt = Date.now();
+        return token;
+      }
+      // JWT sessions outlive DB state by design, so periodically re-check the
+      // user: a password change or suspension after login must end existing
+      // sessions, not just block new logins. Throttled so this costs at most
+      // one query per user per interval, not one per request.
+      const revalidatedAt = typeof token.revalidatedAt === "number" ? token.revalidatedAt : 0;
+      if (token.id && Date.now() - revalidatedAt > SESSION_REVALIDATE_MS) {
+        const fresh = await db.user.findUnique({
+          where: { id: token.id as string },
+          select: { status: true, globalRole: true, passwordChangedAt: true }
+        });
+        if (!fresh || fresh.status !== "ACTIVE") return null;
+        const authTime = typeof token.authTime === "number" ? token.authTime : 0;
+        if (fresh.passwordChangedAt && fresh.passwordChangedAt.getTime() > authTime) return null;
+        token.status = fresh.status;
+        token.globalRole = fresh.globalRole;
+        token.revalidatedAt = Date.now();
       }
       return token;
     },

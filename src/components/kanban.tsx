@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-export type KanbanTask = { id: string; title: string; description: string | null; status: string; assignee: { id: string; name: string | null; email: string } | null; dueAt: string | null; submission?: { file: { id: string; originalName: string } } | null };
+export type KanbanTask = { id: string; title: string; description: string | null; status: string; assignee: { id: string; name: string | null; email: string } | null; dueAt: string | null; submission?: { submittedAt: string; file: { id: string; originalName: string } } | null };
 
 async function downloadSubmission(fileId: string) {
   const res = await fetch(`/api/files/${fileId}`);
@@ -45,7 +45,10 @@ export function Kanban({ tasks }: { tasks: KanbanTask[] }) {
           <strong>{t.title}</strong>
           {t.assignee ? <span className="muted">{t.assignee.name || t.assignee.email}</span> : <span className="muted">بدون مسئول</span>}
           {t.dueAt ? <span className="muted">موعد: {new Date(t.dueAt).toLocaleDateString("fa-IR")}</span> : null}
-          {t.submission ? <button className="btn" style={{ fontSize: 12, padding: "6px 10px" }} onClick={(e) => { e.stopPropagation(); downloadSubmission(t.submission!.file.id); }}>دانلود تحویل: {t.submission.file.originalName}</button> : null}
+          {t.submission ? <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <button className="btn" style={{ fontSize: 12, padding: "6px 10px" }} onClick={(e) => { e.stopPropagation(); downloadSubmission(t.submission!.file.id); }}>دانلود تحویل: {t.submission.file.originalName}</button>
+            {t.dueAt && new Date(t.submission.submittedAt) > new Date(t.dueAt) ? <span style={{ fontSize: 11, fontWeight: 800, color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "2px 8px" }}>دیرکرد</span> : null}
+          </div> : null}
         </div>)}
       </div>
     </div>)}
