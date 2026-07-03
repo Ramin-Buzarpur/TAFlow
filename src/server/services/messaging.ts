@@ -5,6 +5,7 @@ import { coursePermissions } from "@/server/auth/permissions";
 import { canAccessCourseOffering, requireCoursePermission } from "@/server/services/rbac";
 import { notifyUser } from "@/server/services/notifications";
 import { checkRateLimit, makeRateLimitKey } from "@/server/auth/rate-limit";
+import { writeAuditLog } from "@/server/services/audit";
 
 function cleanText(body: string) {
   return body.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "").trim();
@@ -28,6 +29,58 @@ export async function createThread(actorId: string, input: { courseOfferingId?: 
   });
   for (const userId of uniqueParticipants.filter((id) => id !== actorId)) await notifyUser({ userId, type: "MESSAGE", title: "پیام جدید", body: input.subject, href: `/messages/${thread.id}` });
   return thread;
+}
+
+async function syncThreadParticipants(threadId: string, userIds: string[]) {
+  const existing = await db.messageThreadParticipant.findMany({ where: { threadId }, select: { userId: true } });
+  const existingIds = new Set(existing.map((e) => e.userId));
+  const toAdd = userIds.filter((id) => !existingIds.has(id));
+  if (toAdd.length) await db.messageThreadParticipant.createMany({ data: toAdd.map((userId) => ({ threadId, userId })) });
+  return toAdd.length;
+}
+
+// Always-available (not a one-time "finalize team" gate) so a professor/Head
+// TA who skipped this at the start of term can still do it later — creating
+// again just syncs in anyone newly added instead of making a duplicate thread.
+export async function createTaTeamThread(actorId: string, courseOfferingId: string) {
+  await requireCoursePermission(actorId, courseOfferingId, coursePermissions.MODERATE_MESSAGES);
+  const offering = await db.courseOffering.findUnique({ where: { id: courseOfferingId }, include: { course: true } });
+  if (!offering) throw new AppError("NOT_FOUND", "Course offering not found", 404);
+  const roles = await db.courseRoleAssignment.findMany({ where: { courseOfferingId, revokedAt: null, role: { in: ["PROFESSOR", "HEAD_TA", "TA"] } }, select: { userId: true } });
+  const userIds = Array.from(new Set(roles.map((r) => r.userId)));
+
+  let thread = await db.messageThread.findFirst({ where: { courseOfferingId, type: "TA_TEAM" } });
+  let addedCount = 0;
+  if (!thread) {
+    thread = await db.messageThread.create({ data: { courseOfferingId, createdById: actorId, type: "TA_TEAM", subject: `تیم TA — ${offering.course.title}`, participants: { create: userIds.map((userId) => ({ userId })) } } });
+    addedCount = userIds.length;
+  } else {
+    addedCount = await syncThreadParticipants(thread.id, userIds);
+  }
+  await writeAuditLog({ actorId, action: "CREATE", entityType: "MessageThread", entityId: thread.id, courseOfferingId, metadata: { type: "TA_TEAM", addedCount } });
+  return { thread, addedCount };
+}
+
+export async function createCourseWideThread(actorId: string, courseOfferingId: string) {
+  await requireCoursePermission(actorId, courseOfferingId, coursePermissions.MODERATE_MESSAGES);
+  const offering = await db.courseOffering.findUnique({ where: { id: courseOfferingId }, include: { course: true } });
+  if (!offering) throw new AppError("NOT_FOUND", "Course offering not found", 404);
+  const [roles, enrollments] = await Promise.all([
+    db.courseRoleAssignment.findMany({ where: { courseOfferingId, revokedAt: null, role: { in: ["PROFESSOR", "HEAD_TA", "TA"] } }, select: { userId: true } }),
+    db.courseEnrollment.findMany({ where: { courseOfferingId, droppedAt: null }, select: { studentId: true } })
+  ]);
+  const userIds = Array.from(new Set([...roles.map((r) => r.userId), ...enrollments.map((e) => e.studentId)]));
+
+  let thread = await db.messageThread.findFirst({ where: { courseOfferingId, type: "COURSE_WIDE" } });
+  let addedCount = 0;
+  if (!thread) {
+    thread = await db.messageThread.create({ data: { courseOfferingId, createdById: actorId, type: "COURSE_WIDE", subject: `کل درس — ${offering.course.title}`, participants: { create: userIds.map((userId) => ({ userId })) } } });
+    addedCount = userIds.length;
+  } else {
+    addedCount = await syncThreadParticipants(thread.id, userIds);
+  }
+  await writeAuditLog({ actorId, action: "CREATE", entityType: "MessageThread", entityId: thread.id, courseOfferingId, metadata: { type: "COURSE_WIDE", addedCount } });
+  return { thread, addedCount };
 }
 
 export async function listThreads(actorId: string, opts: { courseOfferingId?: string; closed?: boolean; take?: number }) {

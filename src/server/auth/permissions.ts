@@ -22,7 +22,8 @@ export const coursePermissions = {
   REQUEST_CERTIFICATE: "certificate:request",
   APPROVE_CERTIFICATE: "certificate:approve",
   MANAGE_ANNOUNCEMENT: "announcement:manage",
-  VIEW_AUDIT: "audit:view"
+  VIEW_AUDIT: "audit:view",
+  MANAGE_COURSE_MATERIALS: "course_materials:manage"
 } as const;
 
 export type CoursePermission = (typeof coursePermissions)[keyof typeof coursePermissions];
@@ -75,7 +76,8 @@ const baseRolePermissions: Record<CourseRoleType, CoursePermission[]> = {
     coursePermissions.VIEW_SURVEY_RESULTS,
     coursePermissions.APPROVE_CERTIFICATE,
     coursePermissions.MANAGE_ANNOUNCEMENT,
-    coursePermissions.VIEW_AUDIT
+    coursePermissions.VIEW_AUDIT,
+    coursePermissions.MANAGE_COURSE_MATERIALS
   ],
   EDUCATION_ADMIN: Object.values(coursePermissions)
 };

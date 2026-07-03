@@ -12,6 +12,8 @@ What's actually implemented in this codebase today, organized by the classic CIA
 - [x] Survey results hidden below `minResponses` so individual answers can't be inferred in small classes
 - [x] Professor's private application notes never sent to student-facing routes
 - [x] File downloads use short-lived signed URLs, not public bucket paths (`src/server/storage/s3.ts`)
+- [x] Course materials and application resumes are gated by course membership, not by file visibility alone — `getFileDownloadUrl` (`src/server/services/files.ts`) special-cases `CourseMaterial`/`applicationResume` to check `canAccessCourseOffering`/`REVIEW_TA_APPLICATION` instead of relying on the uploader marking the file `PUBLIC` (which would leak it to any authenticated user, not just the course)
+- [x] TA application custom fields never accept the built-in fields (student number, GPA, prior grade) as free text — they're always read from `StudentProfile`/`GradeRecord` server-side (`getApplicantContext` in `ta-workflow.ts`) and only their *visibility* to the reviewer is toggled by the opportunity's form config, so an applicant cannot misrepresent them
 - [x] Security headers include a real CSP (`next.config.mjs`) — `'unsafe-eval'`/`ws:` only added in dev, stripped in production builds
 - [ ] Malware/virus scanning on uploaded files (needs an external scanner like ClamAV; not wired up in this dev environment)
 - [ ] Full production SSO/Keycloak (env-driven provider exists in `auth.ts`, but needs a real IdP + realm to actually enable)
@@ -25,13 +27,15 @@ What's actually implemented in this codebase today, organized by the classic CIA
 - [x] `AuditLog` on every sensitive write: role assign/revoke, application status changes, grade entry/publish/import, certificate approve/issue/revoke, file upload/download/delete
 - [x] `SecurityEvent` on login success/failure, lockouts, rate-limit hits, 2FA failures
 - [x] Multi-step operations (accept application → assign role → notify, issue certificate → generate PDF → upload → audit) run inside a single Prisma transaction, not as separate unguarded writes
-- [x] Origin check on all `/api/*` mutation methods (`src/middleware.ts`) — rejects a `POST/PUT/PATCH/DELETE` whose `Origin` header doesn't match `AUTH_URL`, a lightweight CSRF backstop on top of the session cookie's own `SameSite` protection
+- [x] Origin check on all `/api/*` mutation methods (`src/proxy.ts`) — rejects a `POST/PUT/PATCH/DELETE` whose `Origin` header doesn't match `AUTH_URL`, a lightweight CSRF backstop on top of the session cookie's own `SameSite` protection
+- [x] Course-scoped permission grants beyond a role's defaults (e.g. letting a specific TA upload course materials) go through the existing `permissionsJson` extra-grant mechanism on `CourseRoleAssignment`, not a new ad-hoc boolean flag — one code path to audit instead of several
+- [x] Widened file upload whitelist (Excel, PowerPoint, zip, plain text, common code file types for task/assignment deliverables) is still a whitelist, not "any file" — executables remain rejected (`src/server/validation/files.ts`)
 
 ## Availability (stay up, degrade gracefully, resist abuse)
 
 - [x] Rate limiting on every auth-adjacent and write-heavy route: login, register, forgot/reset password, 2FA verify, message send, file upload, TA application submit, poll vote, survey answer, certificate request (`src/server/auth/rate-limit.ts`)
 - [x] Rate limiting is Redis-backed when `REDIS_URL` is set (shared, survives restarts, correct across multiple app instances) and falls back to an in-process in-memory limiter otherwise — the fallback is explicitly a single-instance/dev-only behavior, not something to rely on in a real multi-instance deployment
-- [x] `/api/health` reports database, Redis, and object storage reachability independently, so one dependency being down doesn't hide the others
+- [x] `/api/health` reports database, Redis, and object storage reachability independently, so one dependency being down doesn't hide the others; a "System Health" card on `/admin` now surfaces this visually (green/red per dependency, with latency and a manual re-check) instead of it being a JSON endpoint only an operator with the URL memorized would ever look at
 - [x] Account lockout after repeated failed logins
 - [x] Singleton Prisma Client (`globalForPrisma` pattern in `src/server/db.ts`) so concurrent requests share one bounded connection pool instead of each request opening its own connection
 - [ ] Network-layer DDoS protection (SYN floods, volumetric attacks, etc.) — this is explicitly **out of scope for application code**. Rate limiting here protects specific *endpoints* from abuse by an authenticated-or-not client making many requests; it does nothing against a distributed flood at the network layer. That needs a CDN/WAF in front of the app (Cloudflare, AWS Shield, etc.) as an infrastructure decision, not something `next.config.mjs` can solve.

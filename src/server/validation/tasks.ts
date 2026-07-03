@@ -15,3 +15,8 @@ export const createTaskSchema = z.object({
 export const updateTaskStatusSchema = z.object({
   status: taskStatusSchema
 });
+
+export const submitTaskSchema = z.object({
+  fileId: cuidSchema,
+  note: z.string().trim().max(2000).optional()
+});

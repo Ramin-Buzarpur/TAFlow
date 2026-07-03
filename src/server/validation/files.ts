@@ -9,7 +9,17 @@ export const ALLOWED_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "image/png",
   "image/jpeg",
-  "image/webp"
+  "image/webp",
+  // Task/assignment deliverables need a wider range than resumes, but still
+  // a whitelist — arbitrary/executable uploads are a real risk, so this is
+  // "common student/TA work formats", not "anything goes".
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/zip",
+  "application/x-zip-compressed",
+  "text/plain",
+  "text/csv"
 ]);
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;

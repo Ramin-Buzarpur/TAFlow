@@ -2,8 +2,59 @@ import "server-only";
 import { db } from "@/server/db";
 import { getCourseRoleNames } from "@/server/services/rbac";
 import { getUnreadMessageCount } from "@/server/services/messaging";
+import { notifyUser } from "@/server/services/notifications";
+
+// No cron/job runner exists in this project, so this runs opportunistically
+// whenever the dashboard loads. It's idempotent (checks for an existing
+// DEADLINE notification for the same entity in the last 24h) instead of
+// needing real scheduling infrastructure.
+async function notifyUpcomingDeadlines(userId: string) {
+  const now = new Date();
+  const soon = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const recentCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  const [tasks, gradeItems] = await Promise.all([
+    db.task.findMany({
+      where: { assigneeId: userId, dueAt: { gte: now, lte: soon }, status: { notIn: ["DONE", "CANCELLED"] }, submissions: { none: { userId } } },
+      select: { id: true, title: true, dueAt: true }
+    }),
+    db.gradeItem.findMany({
+      where: { dueAt: { gte: now, lte: soon }, courseOffering: { enrollments: { some: { studentId: userId, droppedAt: null } } }, submissions: { none: { studentId: userId } } },
+      select: { id: true, title: true, dueAt: true }
+    })
+  ]);
+
+  const candidates = [
+    ...tasks.map((t) => ({ entityType: "Task", entityId: t.id, title: t.title, dueAt: t.dueAt })),
+    ...gradeItems.map((g) => ({ entityType: "GradeItem", entityId: g.id, title: g.title, dueAt: g.dueAt }))
+  ];
+
+  for (const item of candidates) {
+    const alreadyNotified = await db.notification.findFirst({
+      where: {
+        userId,
+        type: "DEADLINE",
+        createdAt: { gte: recentCutoff },
+        AND: [
+          { metadata: { path: ["entityType"], equals: item.entityType } },
+          { metadata: { path: ["entityId"], equals: item.entityId } }
+        ]
+      }
+    });
+    if (alreadyNotified) continue;
+    await notifyUser({
+      userId,
+      type: "DEADLINE",
+      title: "مهلت نزدیک است",
+      body: `${item.title} — کمتر از ۲۴ ساعت مانده`,
+      href: item.entityType === "Task" ? "/dashboard" : "/grades",
+      metadata: { entityType: item.entityType, entityId: item.entityId }
+    });
+  }
+}
 
 export async function dashboardSummary(userId: string) {
+  await notifyUpcomingDeadlines(userId);
   const user = await db.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, globalRole: true } });
   const [myRoles, myApplications, sessions, notifications, announcements, unreadMessages] = await Promise.all([
     db.courseRoleAssignment.findMany({ where: { userId, revokedAt: null }, include: { courseOffering: { include: { course: true, semester: true } } }, take: 10 }),
@@ -23,6 +74,26 @@ export async function dashboardSummary(userId: string) {
   };
 
   return { user, counters, myRoles, myApplications, sessions, notifications, announcements };
+}
+
+// TA-specific view: a TA who is also a plain student elsewhere already sees
+// the base dashboardSummary section above; this adds "my tasks as a TA"
+// specifically, which previously had no dedicated view at all (only Head TA
+// saw the whole team's open tasks).
+export async function taSummary(userId: string) {
+  const tasks = await db.task.findMany({
+    where: { assigneeId: userId },
+    include: {
+      courseOffering: { include: { course: true } },
+      submissions: { where: { userId }, include: { file: { select: { id: true, originalName: true } } } }
+    },
+    orderBy: { dueAt: "asc" },
+    take: 20
+  });
+  return {
+    tasks: tasks.map((t) => ({ ...t, submission: t.submissions[0] ?? null })),
+    counters: { myOpenTasks: tasks.filter((t) => t.status !== "DONE" && t.status !== "CANCELLED").length }
+  };
 }
 
 export async function professorSummary(professorId: string) {

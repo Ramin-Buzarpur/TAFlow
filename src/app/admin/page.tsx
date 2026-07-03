@@ -1,7 +1,7 @@
 import { auth } from "@/server/auth/auth";
 import { listDepartments, listSemesters, listCourses, listCourseOfferings, listUsers } from "@/server/services/admin";
 import { Topbar, Card, EmptyState, StatusBadge } from "@/components/ui";
-import { DepartmentForm, SemesterForm, CourseForm, CourseOfferingForm, RoleAssignForm } from "./ui";
+import { DepartmentForm, SemesterForm, CourseForm, CourseOfferingForm, RoleAssignForm, SystemHealthCard } from "./ui";
 
 export default async function AdminPage() {
   const session = await auth();
@@ -22,6 +22,7 @@ export default async function AdminPage() {
       <Card><h2>ارائه درس‌ها</h2><CourseOfferingForm courses={courses} semesters={semesters}/><div className="stack" style={{ marginTop: 14 }}>{offerings.slice(0, 10).map((o) => <div className="list-row" key={o.id}><div><strong>{o.course.title}</strong><p className="muted">{o.semester.title} — {o.professor.name}</p></div><StatusBadge status={o.status}/></div>)}</div></Card>
       <Card><h2>کاربران</h2><div className="stack">{users.map((u) => <div className="list-row" key={u.id}><div><strong>{u.name || u.email}</strong><p className="muted">{u.email}</p></div><StatusBadge status={u.globalRole}/></div>)}</div></Card>
       <Card><h2>نقش‌ها و مجوزهای درس‌محور</h2><RoleAssignForm/></Card>
+      <Card><h2>سلامت سیستم</h2><SystemHealthCard/></Card>
     </section>
   </main></>;
 }

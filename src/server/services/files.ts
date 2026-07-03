@@ -5,7 +5,7 @@ import { db } from "@/server/db";
 import { AppError, PermissionError } from "@/server/errors";
 import { isGlobalAdmin } from "@/server/auth/permissions";
 import { coursePermissions } from "@/server/auth/permissions";
-import { requireCoursePermission } from "@/server/services/rbac";
+import { canAccessCourseOffering, requireCoursePermission } from "@/server/services/rbac";
 import { writeAuditLog } from "@/server/services/audit";
 import { putObject, getSignedDownloadUrl, deleteObject } from "@/server/storage/s3";
 import { checkRateLimit, makeRateLimitKey } from "@/server/auth/rate-limit";
@@ -49,7 +49,7 @@ export async function uploadFile(actorId: string, input: { buffer: Buffer; origi
 export async function getFileDownloadUrl(actorId: string, fileId: string) {
   const file = await db.uploadedFile.findUnique({
     where: { id: fileId },
-    include: { applicationResume: { include: { opportunity: true } } }
+    include: { applicationResume: { include: { opportunity: true } }, courseMaterial: true }
   });
   if (!file || file.deletedAt) throw new AppError("NOT_FOUND", "File not found", 404);
 
@@ -59,6 +59,8 @@ export async function getFileDownloadUrl(actorId: string, fileId: string) {
     if (!admin) {
       if (file.visibility === "COURSE_STAFF" && file.applicationResume) {
         await requireCoursePermission(actorId, file.applicationResume.opportunity.courseOfferingId, coursePermissions.REVIEW_TA_APPLICATION);
+      } else if (file.courseMaterial) {
+        if (!(await canAccessCourseOffering(actorId, file.courseMaterial.courseOfferingId))) throw new PermissionError();
       } else {
         throw new PermissionError();
       }

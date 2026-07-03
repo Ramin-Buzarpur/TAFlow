@@ -47,6 +47,18 @@ button, .btn, a { -webkit-tap-highlight-color: transparent; }
 .user-menu-chip .avatar { width: 30px; height: 30px; }
 .user-menu-name { font-weight: 800; font-size: 14px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 700px) { .user-menu-name { display: none; } }
+.notif-bell { position: relative; }
+.notif-bell-toggle { position: relative; padding: 10px 12px; }
+.notif-dot { position: absolute; top: -4px; inset-inline-end: -4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.notif-panel { position: absolute; top: calc(100% + 10px); inset-inline-end: 0; width: min(380px, calc(100vw - 40px)); max-height: 420px; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 22px 50px rgba(15,23,42,.16); padding: 14px; display: grid; gap: 10px; z-index: 30; }
+.notif-panel-head { display: flex; align-items: center; justify-content: space-between; }
+.notif-link { display: block; }
+.notif-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.notif-row p { margin: 4px 0 0; font-size: 13px; }
+.notif-row .notif-time { font-size: 12px; }
+.notif-row[data-unread="true"] { background: #eff6ff; border-color: #bfdbfe; }
+[data-theme="dark"] .notif-row { background: var(--card); color: var(--text); }
+[data-theme="dark"] .notif-row[data-unread="true"] { background: rgba(37,99,235,.16); border-color: rgba(37,99,235,.35); }
 .mobile-nav { display: none; }
 .mobile-nav-toggle { padding: 10px 12px; }
 .mobile-nav-panel { position: absolute; top: calc(100% + 10px); left: 20px; right: 20px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 22px 50px rgba(15,23,42,.16); padding: 10px; display: grid; gap: 2px; overflow: hidden; z-index: 20; }

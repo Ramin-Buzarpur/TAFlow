@@ -1,7 +1,13 @@
 "use client";
 import { useState } from "react";
 
-export type KanbanTask = { id: string; title: string; description: string | null; status: string; assignee: { id: string; name: string | null; email: string } | null; dueAt: string | null };
+export type KanbanTask = { id: string; title: string; description: string | null; status: string; assignee: { id: string; name: string | null; email: string } | null; dueAt: string | null; submission?: { file: { id: string; originalName: string } } | null };
+
+async function downloadSubmission(fileId: string) {
+  const res = await fetch(`/api/files/${fileId}`);
+  const json = await res.json();
+  if (res.ok) window.open(json.url, "_blank");
+}
 
 const COLUMNS: { key: string; label: string }[] = [
   { key: "TODO", label: "تعریف‌شده" },
@@ -39,6 +45,7 @@ export function Kanban({ tasks }: { tasks: KanbanTask[] }) {
           <strong>{t.title}</strong>
           {t.assignee ? <span className="muted">{t.assignee.name || t.assignee.email}</span> : <span className="muted">بدون مسئول</span>}
           {t.dueAt ? <span className="muted">موعد: {new Date(t.dueAt).toLocaleDateString("fa-IR")}</span> : null}
+          {t.submission ? <button className="btn" style={{ fontSize: 12, padding: "6px 10px" }} onClick={(e) => { e.stopPropagation(); downloadSubmission(t.submission!.file.id); }}>دانلود تحویل: {t.submission.file.originalName}</button> : null}
         </div>)}
       </div>
     </div>)}

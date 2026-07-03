@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { MotionConfig } from "motion/react";
 import { Topbar, Card, Badge, Kpi } from "@/components/ui";
-import { CommandPalette } from "@/components/command-palette";
 import { TextFlip } from "@/components/marketing/text-flip";
 import { AnimatedCounter } from "@/components/marketing/animated-counter";
 import { Reveal } from "@/components/marketing/reveal";
@@ -29,7 +28,7 @@ export default function HomePage() {
 
   return <MotionConfig reducedMotion="user">
     <AosProvider/>
-    <Topbar/><CommandPalette/>
+    <Topbar/>
     <main className="shell">
       <section className="hero">
         <div className="hero-blobs"><span/><span/><span/></div>

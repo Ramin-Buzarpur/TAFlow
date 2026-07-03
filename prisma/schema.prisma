@@ -165,6 +165,8 @@ enum MessageThreadType {
   GRADE_APPEAL
   OFFICE_HOUR
   ADMIN_SUPPORT
+  TA_TEAM
+  COURSE_WIDE
 }
 
 enum MessageStatus {
@@ -206,6 +208,7 @@ enum NotificationType {
   GRADE
   ANNOUNCEMENT
   SECURITY
+  DEADLINE
 }
 
 enum AuditAction {
@@ -276,6 +279,7 @@ model User {
   createdOfficeHours      OfficeHourSession[]        @relation("OfficeHourCreator")
   hostedOfficeHours       OfficeHourSession[]        @relation("OfficeHourHost")
   officeHourRegistrations OfficeHourRegistration[]   @relation("OfficeHourRegistrant")
+  officeHourQueueEntries  OfficeHourQueueEntry[]     @relation("OfficeHourQueueStudent")
   rosterExports           ClassRosterExport[]
   gradeCategories         GradeCategory[]            @relation("GradeCategoryCreator")
   gradeItems              GradeItem[]                @relation("GradeItemCreator")
@@ -304,6 +308,9 @@ model User {
   academicEvents          AcademicCalendarEvent[]    @relation("AcademicEventCreator")
   assignedTasks           Task[]                     @relation("TaskAssignee")
   createdTasks            Task[]                     @relation("TaskCreator")
+  taskSubmissions         TaskSubmission[]           @relation("TaskSubmitter")
+  assignmentSubmissions   AssignmentSubmission[]     @relation("AssignmentSubmitter")
+  uploadedCourseMaterials CourseMaterial[]           @relation("CourseMaterialUploader")
   activityReports         ActivityReport[]
   notifications           Notification[]
   auditLogs               AuditLog[]                 @relation("AuditActor")
@@ -460,6 +467,7 @@ model CourseOffering {
   academicEvents       AcademicCalendarEvent[]
   tasks                Task[]
   activityReports      ActivityReport[]
+  materials            CourseMaterial[]
 
   // section is nullable, and Postgres treats each NULL as distinct in a
   // plain unique constraint, so this alone would let two offerings with
@@ -528,6 +536,8 @@ model TAOpportunity {
   needsHeadTA      Boolean             @default(false)
   requirements     String              @db.Text
   selectionRubric  Json?
+  formConfigJson   Json?
+  opensAt          DateTime?
   deadline         DateTime
   status           TAOpportunityStatus @default(DRAFT)
   publishedAt      DateTime?
@@ -549,6 +559,7 @@ model TAApplication {
   requestedRole   RequestedTARole
   motivationText  String              @db.Text
   resumeFileId    String?             @unique
+  customFieldsJson Json?
   status          TAApplicationStatus @default(SUBMITTED)
   score           Decimal?            @db.Decimal(5, 2)
   rejectionReason String?             @db.Text
@@ -618,22 +629,39 @@ model ResumeItem {
 }
 
 model UploadedFile {
-  id                  String               @id @default(cuid())
-  ownerId             String
-  originalName        String
-  storageKey          String               @unique
-  mimeType            String
-  sizeBytes           Int
-  checksumSha256      String?
-  visibility          FileVisibility       @default(PRIVATE)
-  createdAt           DateTime             @default(now())
-  deletedAt           DateTime?
-  owner               User                 @relation("UserUploadedFiles", fields: [ownerId], references: [id], onDelete: Cascade)
-  applicationResume   TAApplication?       @relation("ApplicationResumeFile")
-  certificateTemplate CertificateTemplate? @relation("CertificateTemplateFile")
-  certificatePdf      TACertificate?       @relation("CertificatePdfFile")
+  id                   String                @id @default(cuid())
+  ownerId              String
+  originalName         String
+  storageKey           String                @unique
+  mimeType             String
+  sizeBytes            Int
+  checksumSha256       String?
+  visibility           FileVisibility        @default(PRIVATE)
+  createdAt            DateTime              @default(now())
+  deletedAt            DateTime?
+  owner                User                  @relation("UserUploadedFiles", fields: [ownerId], references: [id], onDelete: Cascade)
+  applicationResume    TAApplication?        @relation("ApplicationResumeFile")
+  certificateTemplate  CertificateTemplate?  @relation("CertificateTemplateFile")
+  certificatePdf       TACertificate?        @relation("CertificatePdfFile")
+  taskSubmission       TaskSubmission?       @relation("TaskSubmissionFile")
+  assignmentSubmission AssignmentSubmission? @relation("AssignmentSubmissionFile")
+  courseMaterial       CourseMaterial?       @relation("CourseMaterialFile")
 
   @@index([ownerId])
+}
+
+model CourseMaterial {
+  id               String         @id @default(cuid())
+  courseOfferingId String
+  uploadedById     String
+  fileId           String         @unique
+  title            String?
+  createdAt        DateTime       @default(now())
+  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  uploadedBy       User           @relation("CourseMaterialUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  file             UploadedFile   @relation("CourseMaterialFile", fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([courseOfferingId, createdAt])
 }
 
 model OfficeHourSession {
@@ -655,6 +683,7 @@ model OfficeHourSession {
   createdBy        User                     @relation("OfficeHourCreator", fields: [createdById], references: [id], onDelete: Restrict)
   host             User                     @relation("OfficeHourHost", fields: [hostId], references: [id], onDelete: Restrict)
   registrations    OfficeHourRegistration[]
+  queueEntries     OfficeHourQueueEntry[]
 
   @@index([courseOfferingId, startsAt])
   @@index([hostId, startsAt])
@@ -671,6 +700,27 @@ model OfficeHourRegistration {
 
   @@unique([sessionId, studentId])
   @@index([studentId])
+}
+
+enum OfficeHourQueueStatus {
+  WAITING
+  CALLED
+  DONE
+  LEFT
+}
+
+model OfficeHourQueueEntry {
+  id        String                @id @default(cuid())
+  sessionId String
+  studentId String
+  joinedAt  DateTime              @default(now())
+  calledAt  DateTime?
+  status    OfficeHourQueueStatus @default(WAITING)
+  session   OfficeHourSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student   User                  @relation("OfficeHourQueueStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentId])
+  @@index([sessionId, status, joinedAt])
 }
 
 model ClassRosterExport {
@@ -711,23 +761,24 @@ model GradeCategory {
 }
 
 model GradeItem {
-  id               String          @id @default(cuid())
+  id               String                 @id @default(cuid())
   courseOfferingId String
   categoryId       String
   createdById      String
   assigneeId       String?
   title            String
-  maxScore         Decimal         @db.Decimal(6, 2)
+  maxScore         Decimal                @db.Decimal(6, 2)
   dueAt            DateTime?
-  visibility       GradeVisibility @default(STAFF_ONLY)
+  visibility       GradeVisibility        @default(STAFF_ONLY)
   lockedAt         DateTime?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  courseOffering   CourseOffering  @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  category         GradeCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  createdBy        User            @relation("GradeItemCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  assignee         User?           @relation("GradeItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  courseOffering   CourseOffering         @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  category         GradeCategory          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdBy        User                   @relation("GradeItemCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  assignee         User?                  @relation("GradeItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   records          GradeRecord[]
+  submissions      AssignmentSubmission[]
 
   @@unique([courseOfferingId, title])
   @@index([categoryId])
@@ -781,6 +832,23 @@ model RegradeRequest {
   // backstop against the race between the check and the insert.
   @@index([gradeRecordId])
   @@index([studentId, status])
+}
+
+// Same shape as TaskSubmission (one file, resubmitting overwrites), but for
+// a student submitting an assignment against a GradeItem rather than a TA
+// submitting a Task deliverable.
+model AssignmentSubmission {
+  id          String       @id @default(cuid())
+  gradeItemId String
+  studentId   String
+  fileId      String       @unique
+  note        String?      @db.Text
+  submittedAt DateTime     @default(now())
+  gradeItem   GradeItem    @relation(fields: [gradeItemId], references: [id], onDelete: Cascade)
+  student     User         @relation("AssignmentSubmitter", fields: [studentId], references: [id], onDelete: Cascade)
+  file        UploadedFile @relation("AssignmentSubmissionFile", fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@unique([gradeItemId, studentId])
 }
 
 model GradeChangeLog {
@@ -1126,24 +1194,42 @@ model AcademicCalendarEvent {
 }
 
 model Task {
-  id               String         @id @default(cuid())
+  id               String           @id @default(cuid())
   courseOfferingId String
   createdById      String
   assigneeId       String?
   title            String
-  description      String?        @db.Text
-  status           TaskStatus     @default(TODO)
+  description      String?          @db.Text
+  status           TaskStatus       @default(TODO)
   estimatedMinutes Int?
   dueAt            DateTime?
   completedAt      DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  createdBy        User           @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  assignee         User?          @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  courseOffering   CourseOffering   @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  createdBy        User             @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  assignee         User?            @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  submissions      TaskSubmission[]
 
   @@index([courseOfferingId, status])
   @@index([assigneeId, status])
+}
+
+// One active submission per task/user; resubmitting overwrites the same row
+// since only the latest deliverable matters (no revoke/reassign history like
+// CourseRoleAssignment needs).
+model TaskSubmission {
+  id          String       @id @default(cuid())
+  taskId      String
+  userId      String
+  fileId      String       @unique
+  note        String?      @db.Text
+  submittedAt DateTime     @default(now())
+  task        Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User         @relation("TaskSubmitter", fields: [userId], references: [id], onDelete: Cascade)
+  file        UploadedFile @relation("TaskSubmissionFile", fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@unique([taskId, userId])
 }
 
 model ActivityReport {

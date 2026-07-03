@@ -1,7 +1,40 @@
 "use client";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { JalaliHint } from "@/components/jalali-hint";
 import { useToast } from "@/components/toast";
+
+type HealthReport = { status: string; database: string; redis: string; storage: string; latencyMs: number; time: string };
+
+function HealthDot({ ok }: { ok: boolean }) {
+  return <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: ok ? "#22c55e" : "#ef4444", marginInlineEnd: 6 }}/>;
+}
+
+export function SystemHealthCard() {
+  const [report, setReport] = useState<HealthReport | null>(null);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+    fetch("/api/health").then(async (res) => {
+      const json = await res.json();
+      if (!ignore) { setReport(json); setCheckedAt(new Date().toLocaleTimeString("fa-IR")); setLoading(false); }
+    });
+    return () => { ignore = true; };
+  }, [refreshToken]);
+
+  return <div className="stack">
+    {report ? <div className="stack">
+      <div className="list-row"><div><HealthDot ok={report.database === "ok"}/>پایگاه‌داده</div><span className="muted">{report.database}</span></div>
+      <div className="list-row"><div><HealthDot ok={report.redis !== "error"}/>Redis</div><span className="muted">{report.redis === "not_configured" ? "پیکربندی نشده (in-memory)" : report.redis}</span></div>
+      <div className="list-row"><div><HealthDot ok={report.storage === "ok"}/>ذخیره‌سازی فایل</div><span className="muted">{report.storage}</span></div>
+      <p className="muted">تاخیر: {report.latencyMs} میلی‌ثانیه — آخرین بررسی: {checkedAt}</p>
+    </div> : <p className="muted">در حال بررسی...</p>}
+    <button className="btn" disabled={loading} onClick={() => { setLoading(true); setRefreshToken((t) => t + 1); }}>بررسی مجدد</button>
+  </div>;
+}
 
 function useSubmit(url: string, buildBody: (fd: FormData) => unknown) {
   const router = useRouter();

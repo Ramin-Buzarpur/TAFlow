@@ -37,8 +37,10 @@ export async function createTAOpportunity(actorId: string, input: {
   requiredTAs?: number;
   needsHeadTA?: boolean;
   requirements: string;
+  opensAt?: Date;
   deadline: Date;
   selectionRubric?: Record<string, unknown>;
+  formConfig?: { builtIn: { studentNumber: boolean; gpa: boolean; priorGrade: boolean; resume: boolean }; customFields: Array<{ key: string; label: string; type: string; required: boolean }> };
 }) {
   await requireCoursePermission(actorId, input.courseOfferingId, coursePermissions.CREATE_TA_OPPORTUNITY);
   const opportunity = await db.tAOpportunity.create({
@@ -50,8 +52,10 @@ export async function createTAOpportunity(actorId: string, input: {
       requiredTAs: input.requiredTAs ?? 1,
       needsHeadTA: input.needsHeadTA ?? false,
       requirements: input.requirements,
+      opensAt: input.opensAt,
       deadline: input.deadline,
       selectionRubric: input.selectionRubric ? jsonSafe(input.selectionRubric) : undefined,
+      formConfigJson: input.formConfig ? jsonSafe(input.formConfig) : undefined,
       status: "PUBLISHED",
       publishedAt: new Date()
     },
@@ -90,11 +94,27 @@ export async function closeTAOpportunity(actorId: string, id: string) {
   return updated;
 }
 
+export function readFormConfig(formConfigJson: unknown): { builtIn: { studentNumber: boolean; gpa: boolean; priorGrade: boolean; resume: boolean }; customFields: Array<{ key: string; label: string; type: string; required: boolean }> } | null {
+  if (!formConfigJson || typeof formConfigJson !== "object") return null;
+  const config = formConfigJson as Record<string, unknown>;
+  const builtInRaw = (config.builtIn ?? {}) as Record<string, unknown>;
+  return {
+    builtIn: {
+      studentNumber: Boolean(builtInRaw.studentNumber),
+      gpa: Boolean(builtInRaw.gpa),
+      priorGrade: Boolean(builtInRaw.priorGrade),
+      resume: builtInRaw.resume !== false
+    },
+    customFields: Array.isArray(config.customFields) ? (config.customFields as Array<{ key: string; label: string; type: string; required: boolean }>) : []
+  };
+}
+
 export async function submitTAApplication(userId: string, input: {
   opportunityId: string;
   requestedRole: "TA" | "HEAD_TA" | "EITHER";
   motivationText: string;
   resumeFileId?: string;
+  customFields?: Record<string, string | number>;
 }) {
   const limiter = await checkRateLimit(makeRateLimitKey("submit-application", userId), 20, 60 * 60 * 1000);
   if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many application submissions", 429);
@@ -104,8 +124,25 @@ export async function submitTAApplication(userId: string, input: {
   if (opportunity.status !== "PUBLISHED" || opportunity.deadline < new Date()) {
     throw new AppError("OPPORTUNITY_CLOSED", "This opportunity is not accepting applications", 409);
   }
+  if (opportunity.opensAt && opportunity.opensAt > new Date()) {
+    throw new AppError("OPPORTUNITY_NOT_OPEN_YET", "This opportunity is not accepting applications yet", 409);
+  }
   const existing = await db.tAApplication.findUnique({ where: { opportunityId_applicantId: { opportunityId: input.opportunityId, applicantId: userId } } });
   if (existing) throw new AppError("ALREADY_APPLIED", "You have already applied to this opportunity", 409);
+
+  const formConfig = readFormConfig(opportunity.formConfigJson);
+  const resumeFileId = formConfig && !formConfig.builtIn.resume ? undefined : input.resumeFileId;
+  if (formConfig) {
+    for (const field of formConfig.customFields) {
+      if (field.required && (input.customFields?.[field.key] === undefined || input.customFields?.[field.key] === "")) {
+        throw new AppError("MISSING_REQUIRED_FIELD", `فیلد «${field.label}» الزامی است`, 422);
+      }
+    }
+  }
+  const allowedKeys = new Set((formConfig?.customFields ?? []).map((f) => f.key));
+  const customFieldsToStore = input.customFields
+    ? Object.fromEntries(Object.entries(input.customFields).filter(([key]) => allowedKeys.has(key)))
+    : undefined;
 
   const application = await db.tAApplication.create({
     data: {
@@ -113,13 +150,61 @@ export async function submitTAApplication(userId: string, input: {
       applicantId: userId,
       requestedRole: input.requestedRole,
       motivationText: input.motivationText,
-      resumeFileId: input.resumeFileId
+      resumeFileId,
+      customFieldsJson: customFieldsToStore && Object.keys(customFieldsToStore).length ? jsonSafe(customFieldsToStore) : undefined
     },
     include: APPLICATION_INCLUDE
   });
   await notifyUser({ userId: opportunity.createdById, type: "APPLICATION_STATUS", title: "درخواست جدید TA", body: opportunity.title, href: `/applications/${application.id}` });
   await writeAuditLog({ actorId: userId, action: "CREATE", entityType: "TAApplication", entityId: application.id, courseOfferingId: opportunity.courseOfferingId, afterJson: application });
   return application;
+}
+
+// Built-in reviewer fields (student number, GPA, prior grade in this course)
+// are always read from real StudentProfile/GradeRecord data rather than
+// applicant free text, so a candidate cannot misrepresent them; the
+// opportunity's formConfig only controls which of these the reviewer sees.
+export async function getApplicantContext(actorId: string, opportunityId: string) {
+  const opportunity = await db.tAOpportunity.findUnique({ where: { id: opportunityId }, include: { courseOffering: true } });
+  if (!opportunity) throw new AppError("NOT_FOUND", "TA opportunity not found", 404);
+  await requireCoursePermission(actorId, opportunity.courseOfferingId, coursePermissions.REVIEW_TA_APPLICATION);
+
+  const applications = await db.tAApplication.findMany({ where: { opportunityId }, select: { applicantId: true } });
+  const applicantIds = applications.map((a) => a.applicantId);
+  if (applicantIds.length === 0) return {};
+
+  const [profiles, priorOfferings] = await Promise.all([
+    db.studentProfile.findMany({ where: { userId: { in: applicantIds } }, select: { userId: true, studentNumber: true, gpa: true } }),
+    db.courseOffering.findMany({ where: { courseId: opportunity.courseOffering.courseId, id: { not: opportunity.courseOfferingId } }, select: { id: true } })
+  ]);
+  const offeringIds = priorOfferings.map((o) => o.id);
+  const priorGrades = offeringIds.length
+    ? await db.gradeRecord.findMany({
+        where: { studentId: { in: applicantIds }, status: "PUBLISHED", gradeItem: { courseOfferingId: { in: offeringIds } } },
+        select: { studentId: true, score: true, gradeItem: { select: { title: true, maxScore: true, courseOffering: { select: { semester: { select: { title: true } } } } } } },
+        orderBy: { createdAt: "desc" }
+      })
+    : [];
+
+  const profileMap = new Map(profiles.map((p) => [p.userId, p]));
+  const gradesByStudent = new Map<string, typeof priorGrades>();
+  for (const g of priorGrades) {
+    const list = gradesByStudent.get(g.studentId) ?? [];
+    list.push(g);
+    gradesByStudent.set(g.studentId, list);
+  }
+
+  const result: Record<string, { studentNumber: string | null; gpa: number | null; priorGrades: { title: string; score: number; maxScore: number; semester: string }[] }> = {};
+  for (const id of applicantIds) {
+    const profile = profileMap.get(id);
+    const grades = gradesByStudent.get(id) ?? [];
+    result[id] = {
+      studentNumber: profile?.studentNumber ?? null,
+      gpa: profile?.gpa != null ? Number(profile.gpa) : null,
+      priorGrades: grades.map((g) => ({ title: g.gradeItem.title, score: Number(g.score), maxScore: Number(g.gradeItem.maxScore), semester: g.gradeItem.courseOffering.semester.title }))
+    };
+  }
+  return result;
 }
 
 export async function listApplications(userId: string, opts: { mine?: boolean; opportunityId?: string; status?: TAApplicationStatus; skip?: number; take?: number }) {
@@ -183,6 +268,11 @@ export async function updateApplicationStatus(actorId: string, id: string, statu
   });
 
   await notifyUser({ userId: application.applicantId, type: "APPLICATION_STATUS", title: "وضعیت درخواست تغییر کرد", body: status, href: `/applications/${id}` });
+  if (status === "ACCEPTED") {
+    // Nudge, not a gate: group creation itself stays a manual, always-available
+    // action in the course panel, so saying no here doesn't lose the option.
+    await notifyUser({ userId: actorId, type: "MESSAGE", title: "می‌خواهید گروه ارتباطی تیم را بسازید یا به‌روزرسانی کنید؟", body: "یک عضو جدید به تیم اضافه شد.", href: `/courses/${application.opportunity.courseOfferingId}` });
+  }
   await writeAuditLog({ actorId, action: "UPDATE", entityType: "TAApplication", entityId: id, courseOfferingId: application.opportunity.courseOfferingId, beforeJson: { status: application.status }, afterJson: { status, note, score } });
   return updated;
 }

@@ -1,9 +1,11 @@
 import ExcelJS from "exceljs";
 import { db } from "@/server/db";
+import { AppError } from "@/server/errors";
 import { coursePermissions } from "@/server/auth/permissions";
 import { requireCoursePermission } from "@/server/services/rbac";
 import { parseInput } from "@/server/utils/result";
 import { exportGradesSchema, exportRosterSchema } from "@/server/validation/exports";
+import { readFormConfig } from "@/server/services/ta-workflow";
 
 function csvEscape(value: unknown): string {
   const text = value == null ? "" : String(value);
@@ -19,7 +21,7 @@ function toCsv(rows: Array<Record<string, unknown>>): string {
   ].join("\n");
 }
 
-async function toXlsx(rows: Array<Record<string, unknown>>): Promise<Buffer> {
+export async function toXlsx(rows: Array<Record<string, unknown>>): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("export");
   const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
@@ -132,4 +134,38 @@ export async function exportCourseGrades(actorId: string, input: unknown) {
 
   if (data.format === "CSV") return { mimeType: "text/csv", filename: "course-grades.csv", body: toCsv(rows) };
   return { mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename: "course-grades.xlsx", body: await toXlsx(rows) };
+}
+
+export async function exportApplicationsToExcel(actorId: string, opportunityId: string) {
+  const opportunity = await db.tAOpportunity.findUnique({ where: { id: opportunityId } });
+  if (!opportunity) throw new AppError("NOT_FOUND", "TA opportunity not found", 404);
+  await requireCoursePermission(actorId, opportunity.courseOfferingId, coursePermissions.REVIEW_TA_APPLICATION);
+
+  const applications = await db.tAApplication.findMany({
+    where: { opportunityId },
+    include: { applicant: { select: { name: true, email: true, studentProfile: { select: { studentNumber: true, gpa: true } } } } },
+    orderBy: { submittedAt: "asc" }
+  });
+
+  const formConfig = readFormConfig(opportunity.formConfigJson);
+  const customFields = formConfig?.customFields ?? [];
+
+  const rows = applications.map((a) => {
+    const custom = (a.customFieldsJson ?? {}) as Record<string, unknown>;
+    const row: Record<string, unknown> = {
+      name: a.applicant.name ?? "",
+      email: a.applicant.email,
+      requestedRole: a.requestedRole,
+      status: a.status,
+      score: a.score?.toString() ?? "",
+      motivationText: a.motivationText,
+      submittedAt: a.submittedAt.toISOString()
+    };
+    if (formConfig?.builtIn.studentNumber) row.studentNumber = a.applicant.studentProfile?.studentNumber ?? "";
+    if (formConfig?.builtIn.gpa) row.gpa = a.applicant.studentProfile?.gpa?.toString() ?? "";
+    for (const field of customFields) row[field.label] = custom[field.key] ?? "";
+    return row;
+  });
+
+  return { mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename: `applications-${opportunityId}.xlsx`, body: await toXlsx(rows) };
 }

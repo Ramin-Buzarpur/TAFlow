@@ -78,6 +78,58 @@ export async function markAttendance(actorId: string, registrationId: string, at
   return db.officeHourRegistration.update({ where: { id: registrationId }, data: { attendedAt: attended ? new Date() : null } });
 }
 
+// Polling-based, not WebSocket — the UI re-fetches this every few seconds,
+// the same pattern already used for rate-limit/toast polling elsewhere in
+// this codebase, so no realtime infrastructure is needed for an MVP queue.
+export async function joinQueue(actorId: string, sessionId: string) {
+  const session = await db.officeHourSession.findUnique({ where: { id: sessionId } });
+  if (!session) throw new AppError("NOT_FOUND", "Session not found", 404);
+  if (!(await canAccessCourseOffering(actorId, session.courseOfferingId))) throw new PermissionError();
+  if (session.status === "CANCELLED") throw new AppError("SESSION_CANCELLED", "Session is cancelled", 409);
+  const entry = await db.officeHourQueueEntry.upsert({
+    where: { sessionId_studentId: { sessionId, studentId: actorId } },
+    update: { status: "WAITING", joinedAt: new Date(), calledAt: null },
+    create: { sessionId, studentId: actorId }
+  });
+  await notifyUser({ userId: session.hostId, type: "OFFICE_HOUR", title: "دانشجویی به صف اضافه شد", body: session.title, href: `/sessions/${sessionId}` });
+  return entry;
+}
+
+export async function leaveQueue(actorId: string, sessionId: string) {
+  const entry = await db.officeHourQueueEntry.findUnique({ where: { sessionId_studentId: { sessionId, studentId: actorId } } });
+  if (!entry) throw new AppError("NOT_FOUND", "Queue entry not found", 404);
+  return db.officeHourQueueEntry.update({ where: { id: entry.id }, data: { status: "LEFT" } });
+}
+
+export async function listQueue(actorId: string, sessionId: string) {
+  const session = await db.officeHourSession.findUnique({ where: { id: sessionId } });
+  if (!session) throw new AppError("NOT_FOUND", "Session not found", 404);
+  if (!(await canAccessCourseOffering(actorId, session.courseOfferingId))) throw new PermissionError();
+  return db.officeHourQueueEntry.findMany({
+    where: { sessionId, status: { in: ["WAITING", "CALLED"] } },
+    include: { student: { select: { id: true, name: true, email: true } } },
+    orderBy: { joinedAt: "asc" }
+  });
+}
+
+export async function callNextInQueue(actorId: string, sessionId: string) {
+  const session = await db.officeHourSession.findUnique({ where: { id: sessionId } });
+  if (!session) throw new AppError("NOT_FOUND", "Session not found", 404);
+  await requireCoursePermission(actorId, session.courseOfferingId, coursePermissions.MANAGE_OFFICE_HOUR);
+  const next = await db.officeHourQueueEntry.findFirst({ where: { sessionId, status: "WAITING" }, orderBy: { joinedAt: "asc" } });
+  if (!next) throw new AppError("QUEUE_EMPTY", "No one is waiting in the queue", 404);
+  const updated = await db.officeHourQueueEntry.update({ where: { id: next.id }, data: { status: "CALLED", calledAt: new Date() } });
+  await notifyUser({ userId: next.studentId, type: "OFFICE_HOUR", title: "نوبت شماست", body: session.title, href: `/sessions/${sessionId}` });
+  return updated;
+}
+
+export async function markQueueEntryDone(actorId: string, entryId: string) {
+  const entry = await db.officeHourQueueEntry.findUnique({ where: { id: entryId }, include: { session: true } });
+  if (!entry) throw new AppError("NOT_FOUND", "Queue entry not found", 404);
+  await requireCoursePermission(actorId, entry.session.courseOfferingId, coursePermissions.MANAGE_OFFICE_HOUR);
+  return db.officeHourQueueEntry.update({ where: { id: entryId }, data: { status: "DONE" } });
+}
+
 export function buildIcs(session: { title: string; description?: string | null; startsAt: Date; endsAt: Date; meetingUrl?: string | null; location?: string | null }) {
   const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
   const esc = (s?: string | null) => (s || "").replace(/\n/g, "\\n").replace(/,/g, "\\,");

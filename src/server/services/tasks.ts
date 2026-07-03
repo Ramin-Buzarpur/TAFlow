@@ -1,7 +1,7 @@
 import "server-only";
 import type { TaskStatus } from "@prisma/client";
 import { db } from "@/server/db";
-import { AppError } from "@/server/errors";
+import { AppError, PermissionError } from "@/server/errors";
 import { coursePermissions } from "@/server/auth/permissions";
 import { canAccessCourseOffering, requireCoursePermission } from "@/server/services/rbac";
 import { writeAuditLog } from "@/server/services/audit";
@@ -17,7 +17,27 @@ export async function createTask(actorId: string, input: { courseOfferingId: str
 
 export async function listTasks(actorId: string, courseOfferingId: string) {
   if (!(await canAccessCourseOffering(actorId, courseOfferingId))) throw new AppError("PERMISSION_DENIED", "Access denied", 403);
-  return db.task.findMany({ where: { courseOfferingId }, include: { assignee: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: "desc" } });
+  return db.task.findMany({
+    where: { courseOfferingId },
+    include: { assignee: { select: { id: true, name: true, email: true } }, submissions: { include: { file: { select: { id: true, originalName: true } } } } },
+    orderBy: { createdAt: "desc" }
+  });
+}
+
+export async function submitTask(actorId: string, taskId: string, fileId: string, note?: string) {
+  const task = await db.task.findUnique({ where: { id: taskId } });
+  if (!task) throw new AppError("NOT_FOUND", "Task not found", 404);
+  if (task.assigneeId !== actorId) throw new PermissionError("Only the assigned TA can submit this task");
+  // One active submission per task/user: resubmitting replaces the file, it
+  // doesn't need history the way role assignments do.
+  const submission = await db.taskSubmission.upsert({
+    where: { taskId_userId: { taskId, userId: actorId } },
+    create: { taskId, userId: actorId, fileId, note },
+    update: { fileId, note, submittedAt: new Date() },
+    include: { file: { select: { id: true, originalName: true } } }
+  });
+  await writeAuditLog({ actorId, action: "UPDATE", entityType: "TaskSubmission", entityId: submission.id, courseOfferingId: task.courseOfferingId, afterJson: submission });
+  return submission;
 }
 
 export async function updateTaskStatus(actorId: string, taskId: string, status: TaskStatus) {

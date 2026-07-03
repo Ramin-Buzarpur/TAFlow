@@ -146,6 +146,39 @@ export async function getStudentGrades(actorId: string, courseOfferingId?: strin
   return items;
 }
 
+// Distinct from getStudentGrades above: that shows already-published scores,
+// this shows items with a due date so a student can submit work before
+// grading even happens (previously there was no submission concept at all —
+// GradeItem.dueAt existed but nothing let a student act on it).
+export async function listMyAssignments(studentId: string) {
+  const enrollments = await db.courseEnrollment.findMany({ where: { studentId, droppedAt: null }, select: { courseOfferingId: true } });
+  const offeringIds = enrollments.map((e) => e.courseOfferingId);
+  const items = await db.gradeItem.findMany({
+    where: { courseOfferingId: { in: offeringIds }, dueAt: { not: null } },
+    include: {
+      courseOffering: { include: { course: true } },
+      submissions: { where: { studentId }, include: { file: { select: { id: true, originalName: true } } } }
+    },
+    orderBy: { dueAt: "asc" }
+  });
+  return items.map((i) => ({ ...i, submission: i.submissions[0] ?? null }));
+}
+
+export async function submitAssignment(actorId: string, gradeItemId: string, fileId: string, note?: string) {
+  const item = await db.gradeItem.findUnique({ where: { id: gradeItemId } });
+  if (!item) throw new AppError("NOT_FOUND", "Grade item not found", 404);
+  const enrolled = await db.courseEnrollment.findFirst({ where: { courseOfferingId: item.courseOfferingId, studentId: actorId, droppedAt: null } });
+  if (!enrolled) throw new PermissionError("Only enrolled students can submit this assignment");
+  const submission = await db.assignmentSubmission.upsert({
+    where: { gradeItemId_studentId: { gradeItemId, studentId: actorId } },
+    create: { gradeItemId, studentId: actorId, fileId, note },
+    update: { fileId, note, submittedAt: new Date() },
+    include: { file: { select: { id: true, originalName: true } } }
+  });
+  await writeAuditLog({ actorId, action: "UPDATE", entityType: "AssignmentSubmission", entityId: submission.id, courseOfferingId: item.courseOfferingId, afterJson: submission });
+  return submission;
+}
+
 export async function createRegradeRequest(actorId: string, input: { gradeRecordId: string; reason: string }) {
   const record = await db.gradeRecord.findUnique({ where: { id: input.gradeRecordId }, include: { gradeItem: true } });
   if (!record) throw new AppError("NOT_FOUND", "Grade record not found", 404);

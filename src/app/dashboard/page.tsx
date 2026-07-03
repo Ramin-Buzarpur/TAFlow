@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { BookOpen, FileText, CalendarClock, Bell, MessageSquare, Clock, BarChart3, Users, ListChecks, Briefcase, Award } from "lucide-react";
 import { auth } from "@/server/auth/auth";
-import { dashboardSummary, adminSummary, professorSummary, headTaSummary } from "@/server/services/dashboard";
+import { dashboardSummary, adminSummary, professorSummary, headTaSummary, taSummary } from "@/server/services/dashboard";
 import { Topbar, Card, EmptyState, Kpi, StatusBadge } from "@/components/ui";
-import { CommandPalette } from "@/components/command-palette";
+import { DeliverableSubmit } from "@/components/deliverable-submit";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -14,8 +14,14 @@ export default async function DashboardPage() {
   const professor = session.user.globalRole === "PROFESSOR" ? await professorSummary(session.user.id) : null;
   const headTa = await headTaSummary(session.user.id);
   const isHeadTa = headTa.offerings.length > 0;
+  // A person can be a TA in one course and a plain student (or Head TA) in
+  // another at the same time, so this is its own independent section rather
+  // than an either/or with the base dashboard — same pattern as
+  // professor/headTa/admin below.
+  const ta = await taSummary(session.user.id);
+  const isTa = ta.tasks.length > 0;
 
-  return <><Topbar/><CommandPalette/><main className="shell">
+  return <><Topbar/><main className="shell">
     <div className="page-title"><div><h1>داشبورد نقش‌محور</h1><p className="muted">خلاصه عملیات مهم، درخواست‌ها، جلسات و پیام‌های مرتبط با نقش شما.</p></div><Link className="btn btn-primary" href="/opportunities">فرصت‌های TA</Link></div>
 
     <section className="grid grid-5"><Kpi icon={BookOpen} label="درس‌های فعال من" value={data.counters.activeCourses}/><Kpi icon={FileText} label="درخواست‌های من" value={data.counters.applications} tone="purple"/><Kpi icon={CalendarClock} label="جلسات پیش‌رو" value={data.counters.upcomingSessions} tone="orange"/><Kpi icon={Bell} label="اعلان خوانده‌نشده" value={data.counters.unreadNotifications} tone="green"/><Kpi icon={MessageSquare} label="پیام خوانده‌نشده" value={data.counters.unreadMessages} tone="purple"/></section>
@@ -24,6 +30,20 @@ export default async function DashboardPage() {
       <section className="grid grid-4"><Kpi icon={BookOpen} label="درس‌های فعال" value={professor.counters.activeCourses}/><Kpi icon={Clock} label="درخواست‌های در انتظار" value={professor.counters.pendingApplications} tone="orange"/><Kpi icon={MessageSquare} label="پیام‌های باز" value={professor.counters.unansweredThreads} tone="purple"/><Kpi icon={BarChart3} label="نظرسنجی فعال" value={professor.counters.activeSurveys} tone="green"/></section>
       {professor.alerts.length ? <Card style={{ marginTop: 18 }}><h3>هشدارها</h3><div className="stack">{professor.alerts.map((a, i) => <div className="list-row" key={i}>{a}</div>)}</div></Card> : null}
       <section className="grid grid-3" style={{ marginTop: 18 }}>{professor.opportunities.map((o) => <Card key={o.id}><h3>{o.title}</h3><p className="muted">{o.courseOffering.course.title}</p><Link className="btn" href={`/opportunities/${o.id}/applicants`}>بررسی متقاضیان ({o._count.applications})</Link></Card>)}</section>
+    </> : null}
+
+    {isTa ? <><h2 style={{ marginTop: 30 }}>وظایف من به‌عنوان TA</h2>
+      <section className="grid grid-2" style={{ marginTop: 18 }}>
+        {ta.tasks.map((t) => <Card key={t.id}>
+          <div className="list-row" style={{ border: "none", padding: 0, marginBottom: 10 }}>
+            <div><strong>{t.title}</strong><p className="muted">{t.courseOffering.course.title}{t.dueAt ? ` — موعد: ${new Date(t.dueAt).toLocaleDateString("fa-IR")}` : ""}</p></div>
+            <StatusBadge status={t.status}/>
+          </div>
+          {t.description ? <p className="muted" style={{ fontSize: 14 }}>{t.description}</p> : null}
+          {t.submission ? <p className="muted" style={{ fontSize: 13 }}>آخرین تحویل: {t.submission.file.originalName}</p> : null}
+          <DeliverableSubmit endpoint={`/api/tasks/${t.id}/submit`} currentFileName={t.submission?.file.originalName}/>
+        </Card>)}
+      </section>
     </> : null}
 
     {isHeadTa ? <><h2 style={{ marginTop: 30 }}>داشبورد Head TA</h2>

@@ -21,6 +21,9 @@ describe("file upload validation", () => {
 
   it("exposes the expected allow-list", () => {
     expect(ALLOWED_MIME_TYPES.has("image/png")).toBe(true);
-    expect(ALLOWED_MIME_TYPES.has("application/zip")).toBe(false);
+    // Widened for task/assignment deliverables (Round 4) — still a
+    // whitelist, just covering common student/TA work formats now.
+    expect(ALLOWED_MIME_TYPES.has("application/zip")).toBe(true);
+    expect(ALLOWED_MIME_TYPES.has("application/x-msdownload")).toBe(false);
   });
 });

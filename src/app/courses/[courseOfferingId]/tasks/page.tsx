@@ -12,6 +12,6 @@ export default async function CourseTasksPage({ params }: { params: Promise<{ co
   return <><Topbar/><main className="shell">
     <div className="page-title"><div><h1>مدیریت وظایف تیم TA</h1><p className="muted">تعریف، تخصیص و پیگیری وظایف تیم دستیاران آموزشی این درس.</p></div></div>
     <div style={{ marginBottom: 20 }}><NewTaskForm courseOfferingId={courseOfferingId}/></div>
-    {tasks.length ? <Kanban tasks={tasks.map((t) => ({ id: t.id, title: t.title, description: t.description, status: t.status, assignee: t.assignee, dueAt: t.dueAt ? t.dueAt.toISOString() : null }))}/> : <EmptyState title="هنوز وظیفه‌ای تعریف نشده" text="از فرم بالا اولین وظیفه تیم را اضافه کنید."/>}
+    {tasks.length ? <Kanban tasks={tasks.map((t) => ({ id: t.id, title: t.title, description: t.description, status: t.status, assignee: t.assignee, dueAt: t.dueAt ? t.dueAt.toISOString() : null, submission: t.submissions[0] ?? null }))}/> : <EmptyState title="هنوز وظیفه‌ای تعریف نشده" text="از فرم بالا اولین وظیفه تیم را اضافه کنید."/>}
   </main></>;
 }

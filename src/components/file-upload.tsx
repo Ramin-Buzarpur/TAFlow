@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 
-export function FileUpload({ onUploaded, visibility, accept }: { onUploaded: (fileId: string, fileName: string) => void; visibility?: "PRIVATE" | "COURSE_STAFF" | "PUBLIC"; accept?: string }) {
+export function FileUpload({ onUploaded, visibility, accept, helpText }: { onUploaded: (fileId: string, fileName: string) => void; visibility?: "PRIVATE" | "COURSE_STAFF" | "PUBLIC"; accept?: string; helpText?: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -29,7 +29,7 @@ export function FileUpload({ onUploaded, visibility, accept }: { onUploaded: (fi
     style={{ border: `2px dashed ${dragOver ? "var(--primary)" : "var(--line)"}`, borderRadius: 16, padding: 20, textAlign: "center", cursor: "pointer", background: dragOver ? "#eff6ff" : "transparent" }}
   >
     <input ref={inputRef} type="file" accept={accept} style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }}/>
-    <p className="muted">فایل را اینجا رها کنید یا برای انتخاب کلیک کنید (PDF، Word یا تصویر، حداکثر ۱۰ مگابایت)</p>
+    <p className="muted">{helpText || "فایل را اینجا رها کنید یا برای انتخاب کلیک کنید (PDF، Word یا تصویر، حداکثر ۱۰ مگابایت)"}</p>
     {status ? <p style={{ marginTop: 8 }}>{status}</p> : null}
   </div>;
 }
