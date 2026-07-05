@@ -113,7 +113,7 @@ export async function deleteObject(key: string) {
 export async function checkStorageHealth(): Promise<boolean> {
   try {
     const { client, config } = getClient();
-    await client.send(new HeadBucketCommand({ Bucket: config.bucket }));
+    await ensureBucket(client, config);
     return true;
   } catch {
     return false;

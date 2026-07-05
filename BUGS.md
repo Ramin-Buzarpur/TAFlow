@@ -48,11 +48,20 @@
 | Critical | `src/server/services/files.ts` and `src/app/api/health/route.ts` imported `@/server/storage/s3`, but the storage adapter did not exist. This broke `pnpm typecheck` and any file/certificate path that needed storage. | Added a real S3-compatible adapter for MinIO/S3 with put, signed download URL, delete, health check, and local-development bucket creation on first upload. |
 | Medium | Unit tests imported server code that validates environment variables, but Vitest did not provide safe local test env values. | Added a Vitest setup file with non-secret local test values. Production env validation remains active. |
 | Low | `.gitignore` ignored every directory named `storage`, including source code under `src/server/storage`. | Restricted the local artifact ignore rule to `/storage/`. |
+| High | The full E2E suite could exhaust the default Node heap in the Next.js dev server, then cascade into auth/API/database-looking failures. | `pnpm test:e2e` now runs through a repository-level Node runner that starts Next with a 6144 MB heap, waits for readiness, runs Playwright, preserves test failures, and tears down the server process tree cross-platform. |
+| Medium | A successful E2E run could leave Playwright waiting for web-server shutdown instead of exiting cleanly. | The E2E runner owns the server lifecycle directly and the Playwright config can skip its internal webServer when invoked by the runner. |
+| Low | E2E output was flooded by Prisma query logs from the dev server. | Query logging remains available in normal development but is disabled for the E2E runner; Prisma errors still log. |
+| Low | `/api/health` could report storage as degraded in local development before the MinIO bucket had been created. | The storage health check now follows the same non-production bucket-creation behavior as uploads. |
 
-### Still blocked by local environment
+### Validated after Docker was restored
 
-| Severity | Finding | Exact reason |
+| Check | Result | Notes |
 |---|---|---|
-| High | `docker compose up -d` could not start local services. | Docker daemon was not reachable: `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`. |
-| High | Database migration and seed could not be validated against a local Postgres instance. | The Docker-provided Postgres service could not be started because Docker Desktop/daemon is unavailable. |
-| High | `pnpm test:e2e` could not complete. | Playwright started the app, but login flows failed because Prisma could not reach Postgres at `localhost:5432`; the run was stopped after repeated identical database-connection failures. |
+| `docker compose ps` | PASS | PostgreSQL, Redis, MinIO, and Mailpit are healthy. |
+| `pnpm db:migrate` | PASS | Schema already in sync; Prisma Client generated. |
+| `pnpm db:seed` | PASS | Seed completed against local Postgres. |
+| `pnpm typecheck` | PASS | TypeScript validation completed. |
+| `pnpm lint` | PASS | ESLint completed. |
+| `pnpm test` | PASS | 10 files, 33 tests. |
+| `pnpm build` | PASS | Production build completed. |
+| `pnpm test:e2e` | PASS | Normal documented command completed successfully: 23 passed. |

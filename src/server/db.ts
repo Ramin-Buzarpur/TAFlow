@@ -12,7 +12,7 @@ export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
     log:
-      process.env.NODE_ENV === "development"
+      process.env.NODE_ENV === "development" && process.env.TAFLOW_E2E !== "1"
         ? ["query", "error", "warn"]
         : ["error"]
   });

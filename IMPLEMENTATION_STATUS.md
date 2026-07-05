@@ -22,9 +22,10 @@ This file tracks implementation state against `10.tex` and the real repository.
 | Lint validation | COMPLETE | `pnpm lint` passed. |
 | Unit tests | COMPLETE | `pnpm test` passed: 10 files, 33 tests. |
 | Production build | COMPLETE | `pnpm build` passed with local non-secret environment values. |
-| Docker services | EXTERNAL_DEPENDENCY_REQUIRED | Docker daemon is not running or not reachable in this environment. |
-| Database migrate/seed | EXTERNAL_DEPENDENCY_REQUIRED | Requires a reachable local Postgres instance. |
-| End-to-end tests | EXTERNAL_DEPENDENCY_REQUIRED | Requires the seeded local Postgres database; current run failed on `localhost:5432` connection. |
+| Docker services | COMPLETE | `docker compose ps` shows PostgreSQL, Redis, MinIO, and Mailpit healthy. |
+| Database migrate/seed | COMPLETE | `pnpm db:migrate` and `pnpm db:seed` passed against local Postgres. |
+| End-to-end tests | COMPLETE | `pnpm test:e2e` passed through the normal project command: 23 passed. |
+| E2E heap stability | COMPLETE | `pnpm test:e2e` now starts the Next dev server with a repository-managed heap limit instead of requiring shell-specific environment setup. |
 
 ## Current priority matrix
 
@@ -36,6 +37,6 @@ This file tracks implementation state against `10.tex` and the real repository.
 | TOTP 2FA UX | PARTIAL | Backend/API exist; setup/verification UI still needs completion. |
 | Course-scoped RBAC | COMPLETE_BUT_UNVERIFIED | Service-layer permission model exists; DB-backed e2e requires local database. |
 | TA hiring workflow | COMPLETE_BUT_UNVERIFIED | Core workflow exists; file upload dependency is now restored. |
-| Storage and uploads | COMPLETE_BUT_UNVERIFIED | Adapter exists; MinIO runtime validation awaits Docker. |
-| Certificates and PDF persistence | COMPLETE_BUT_UNVERIFIED | Storage dependency restored; full issue/verify flow still needs DB and MinIO validation. |
-| Docker-backed local QA | EXTERNAL_DEPENDENCY_REQUIRED | Blocked until Docker Desktop/daemon is available. |
+| Storage and uploads | COMPLETE_BUT_UNVERIFIED | Adapter and MinIO health path are validated; upload/download permission flows still need deeper feature coverage. |
+| Certificates and PDF persistence | COMPLETE_BUT_UNVERIFIED | Storage dependency restored; certificate issue/verify still needs deeper functional coverage beyond the current E2E suite. |
+| Docker-backed local QA | COMPLETE | Docker-backed baseline validation now passes locally. |

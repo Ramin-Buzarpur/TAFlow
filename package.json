@@ -16,7 +16,7 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test",
+    "test:e2e": "node scripts/run-e2e.mjs",
     "format:check": "prettier --check .",
     "prepare:local": "pnpm install && pnpm db:generate && pnpm db:migrate --name init && pnpm db:seed",
     "setup": "pnpm db:generate && pnpm db:deploy && pnpm db:seed",
