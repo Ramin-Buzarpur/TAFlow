@@ -38,3 +38,21 @@
 - **پیوست فایل به پیام‌ها**: sanitize و rate-limit پیام هست؛ پیوست به دور بعدی موکول شد.
 - **Timesheet و workload analytics و recommendation engine**: حجم مستقل بزرگ.
 - **محافظت DDoS لایه شبکه**: مسئله‌ی زیرساخت (CDN/WAF) است نه کد اپلیکیشن؛ در `SECURITY_NOTES.md` توضیح داده شده.
+
+## Phase 0 baseline - 2026-07-05
+
+### Fixed
+
+| Severity | Finding | Resolution |
+|---|---|---|
+| Critical | `src/server/services/files.ts` and `src/app/api/health/route.ts` imported `@/server/storage/s3`, but the storage adapter did not exist. This broke `pnpm typecheck` and any file/certificate path that needed storage. | Added a real S3-compatible adapter for MinIO/S3 with put, signed download URL, delete, health check, and local-development bucket creation on first upload. |
+| Medium | Unit tests imported server code that validates environment variables, but Vitest did not provide safe local test env values. | Added a Vitest setup file with non-secret local test values. Production env validation remains active. |
+| Low | `.gitignore` ignored every directory named `storage`, including source code under `src/server/storage`. | Restricted the local artifact ignore rule to `/storage/`. |
+
+### Still blocked by local environment
+
+| Severity | Finding | Exact reason |
+|---|---|---|
+| High | `docker compose up -d` could not start local services. | Docker daemon was not reachable: `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`. |
+| High | Database migration and seed could not be validated against a local Postgres instance. | The Docker-provided Postgres service could not be started because Docker Desktop/daemon is unavailable. |
+| High | `pnpm test:e2e` could not complete. | Playwright started the app, but login flows failed because Prisma could not reach Postgres at `localhost:5432`; the run was stopped after repeated identical database-connection failures. |

@@ -15,4 +15,4 @@ prisma/generated/
 playwright-report/
 test-results/
 tests/e2e/.auth/
-storage/
+/storage/
