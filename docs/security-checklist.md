@@ -6,7 +6,7 @@ What's actually implemented in this codebase today, organized by the classic CIA
 
 - [x] Argon2id password hashing (`src/server/auth/password.ts`)
 - [x] TOTP 2FA, secrets encrypted at rest with AES (`src/server/auth/crypto.ts`, `AUTH_ENCRYPTION_KEY`)
-- [x] Recovery codes stored hashed, not raw
+- [ ] TOTP recovery codes. `TwoFactorMethod.recoveryHash` exists in the schema, but the current service does not generate or consume recovery codes. The production policy is to require an administrator/support reset path or a dedicated hashed recovery-code implementation before making 2FA mandatory for all staff accounts.
 - [x] Course-scoped RBAC — every permission check reads the active `CourseRoleAssignment`, never a client-supplied role (`src/server/auth/permissions.ts`, `src/server/services/rbac.ts`)
 - [x] Anonymous surveys/evaluations/polls use a salted hash (`AUTH_SECRET`-derived) instead of storing the real user ID — `PollVote.voterId` is genuinely `null` for anonymous votes (fixed in this round; previously the real user ID was stored alongside the hash, defeating the point)
 - [x] Survey results hidden below `minResponses` so individual answers can't be inferred in small classes
@@ -33,7 +33,7 @@ What's actually implemented in this codebase today, organized by the classic CIA
 
 ## Availability (stay up, degrade gracefully, resist abuse)
 
-- [x] Rate limiting on every auth-adjacent and write-heavy route: login, register, forgot/reset password, 2FA verify, message send, file upload, TA application submit, poll vote, survey answer, certificate request (`src/server/auth/rate-limit.ts`)
+- [x] Rate limiting on every auth-adjacent and write-heavy route: login, register, resend verification email, forgot/reset password, 2FA verify, message send, file upload, TA application submit, poll vote, survey answer, certificate request (`src/server/auth/rate-limit.ts`)
 - [x] Rate limiting is Redis-backed when `REDIS_URL` is set (shared, survives restarts, correct across multiple app instances) and falls back to an in-process in-memory limiter otherwise — the fallback is explicitly a single-instance/dev-only behavior, not something to rely on in a real multi-instance deployment
 - [x] `/api/health` reports database, Redis, and object storage reachability independently, so one dependency being down doesn't hide the others; a "System Health" card on `/admin` now surfaces this visually (green/red per dependency, with latency and a manual re-check) instead of it being a JSON endpoint only an operator with the URL memorized would ever look at
 - [x] Account lockout after repeated failed logins

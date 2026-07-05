@@ -44,6 +44,22 @@ Body:
 }
 ```
 
+## Resend verification email
+
+```http
+POST /api/auth/resend-verification
+```
+
+Body:
+
+```json
+{
+  "email": "student@example.edu"
+}
+```
+
+The response is intentionally generic for missing, already verified, suspended, or deleted accounts. Pending accounts receive a new single-use verification token and any older email verification token for that account is replaced.
+
 ## 2FA setup
 
 ```http

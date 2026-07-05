@@ -125,3 +125,26 @@
 ### Remaining known gap
 
 - Application resume file isolation and file delete ownership still need dedicated E2E coverage.
+
+## Phase 2 authentication/account-security validation - 2026-07-05
+
+### Fixed / added coverage
+
+| Severity | Finding | Resolution |
+|---|---|---|
+| High | Email verification token behavior existed but was not deeply validated, and users had no API for requesting a new verification email after losing or expiring the original link. | Added `/api/auth/resend-verification` with per-email rate limiting, safe generic responses, old-token replacement, and DB-backed regression tests for hashed, expiring, single-use verification tokens. |
+| High | Password reset token behavior existed but lacked regression tests for expiry, single-use enforcement, unknown-email safety, and stored-session invalidation. | Added integration coverage that verifies hashed reset tokens, expired/invalid token rejection, password hash replacement, lockout reset, session deletion, and reuse rejection. |
+| Medium | Mandatory staff 2FA behavior was correct but hidden inside the login provider, making it easy to regress and accidentally lock seeded staff accounts. | Extracted the staff 2FA policy into a small tested helper; default local behavior remains non-enforcing unless `AUTH_ENFORCE_2FA_FOR_STAFF="true"`. |
+| Medium | Security documentation overstated recovery-code support. | Corrected the checklist: TOTP recovery codes are not implemented yet; production rollout needs a hashed recovery-code or support reset workflow. |
+
+### Validated
+
+| Check | Result | Notes |
+|---|---|---|
+| `pnpm test` | PASS | 10 files, 35 tests. |
+| `pnpm test:integration` | PASS | 2 files, 14 tests. |
+
+### Remaining known gap
+
+- Dedicated auth UX for resend verification, forgot/reset password, and TOTP enrollment still needs completion.
+- TOTP recovery codes remain a production gap.

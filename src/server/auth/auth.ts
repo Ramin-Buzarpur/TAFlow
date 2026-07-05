@@ -10,16 +10,12 @@ import { checkRateLimit, makeRateLimitKey } from "@/server/auth/rate-limit";
 import { verifyTotpCode } from "@/server/auth/totp";
 import { getRequestMeta } from "@/server/auth/request";
 import { jsonSafe } from "@/server/utils/json";
+import { staffRoleRequiresTwoFactor } from "@/server/auth/two-factor-policy";
 
 // How stale a JWT session may be before it's re-checked against the user row.
 // This bounds how long a revoked/suspended account or a pre-password-change
 // session can keep working: at most this interval.
 const SESSION_REVALIDATE_MS = 60 * 1000;
-
-function sensitiveRoleNeeds2fa(globalRole: string) {
-  if (process.env.AUTH_ENFORCE_2FA_FOR_STAFF !== "true") return false;
-  return globalRole === "PROFESSOR" || globalRole === "EDUCATION_ADMIN" || globalRole === "SYSTEM_ADMIN";
-}
 
 async function recordSecurityEvent(input: {
   userId?: string;
@@ -120,7 +116,7 @@ const providers: NextAuthConfig["providers"] = [
         return null;
       }
 
-      const mustVerify2fa = user.twoFactorEnabled || user.twoFactorRequired || sensitiveRoleNeeds2fa(user.globalRole);
+      const mustVerify2fa = user.twoFactorEnabled || user.twoFactorRequired || staffRoleRequiresTwoFactor(user.globalRole);
       if (mustVerify2fa) {
         const method = user.twoFactorMethods[0];
         if (!method || !parsed.data.totpCode) {

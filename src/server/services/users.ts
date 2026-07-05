@@ -7,11 +7,21 @@ import { sha256 } from "@/server/auth/crypto";
 import { checkRateLimit, makeRateLimitKey } from "@/server/auth/rate-limit";
 import { getRequestMeta } from "@/server/auth/request";
 import { parseInput } from "@/server/utils/result";
-import { registerSchema, changePasswordSchema, updateProfileSchema } from "@/server/validation/auth";
+import { registerSchema, changePasswordSchema, updateProfileSchema, resendVerificationEmailSchema } from "@/server/validation/auth";
 import { AppError, ValidationError, PermissionError } from "@/server/errors";
 import { sendMail } from "@/server/email/mailer";
 import { verifyEmailEmail } from "@/server/email/templates";
 import { verifyPassword } from "@/server/auth/password";
+
+const EMAIL_VERIFICATION_TTL_MS = 1000 * 60 * 60 * 24;
+
+function emailVerificationIdentifier(email: string) {
+  return `email:${email.toLowerCase()}`;
+}
+
+function buildEmailVerificationUrl(email: string, rawToken: string) {
+  return `${process.env.AUTH_URL || "http://localhost:3000"}/verify-email?email=${encodeURIComponent(email)}&token=${rawToken}`;
+}
 
 export async function registerUser(input: unknown) {
   const data = parseInput(registerSchema, input);
@@ -50,9 +60,9 @@ export async function registerUser(input: unknown) {
     if (shouldVerifyEmail) {
       await tx.verificationToken.create({
         data: {
-          identifier: `email:${created.email}`,
+          identifier: emailVerificationIdentifier(created.email),
           token: sha256(rawVerificationToken),
-          expires: new Date(Date.now() + 1000 * 60 * 60 * 24)
+          expires: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS)
         }
       });
     }
@@ -72,7 +82,7 @@ export async function registerUser(input: unknown) {
   });
 
   if (shouldVerifyEmail) {
-    const verifyUrl = `${process.env.AUTH_URL || "http://localhost:3000"}/verify-email?email=${encodeURIComponent(user.email)}&token=${rawVerificationToken}`;
+    const verifyUrl = buildEmailVerificationUrl(user.email, rawVerificationToken);
     const email = verifyEmailEmail(verifyUrl);
     await sendMail({ to: user.email, ...email });
   }
@@ -85,7 +95,7 @@ export async function registerUser(input: unknown) {
 
 export async function markEmailVerified(email: string, rawToken: string) {
   const tokenHash = sha256(rawToken);
-  const key = `email:${email.toLowerCase()}`;
+  const key = emailVerificationIdentifier(email);
   const token = await db.verificationToken.findUnique({
     where: { identifier_token: { identifier: key, token: tokenHash } }
   });
@@ -95,6 +105,54 @@ export async function markEmailVerified(email: string, rawToken: string) {
     db.user.update({ where: { email: email.toLowerCase() }, data: { emailVerified: new Date(), status: "ACTIVE" } }),
     db.verificationToken.delete({ where: { identifier_token: { identifier: key, token: tokenHash } } })
   ]);
+}
+
+export async function resendVerificationEmail(input: unknown) {
+  const data = parseInput(resendVerificationEmailSchema, input);
+  const meta = await getRequestMeta();
+  const limiter = await checkRateLimit(makeRateLimitKey("resend-verification", meta.ipAddress, data.email), 4, 60 * 60 * 1000);
+  if (!limiter.allowed) throw new AppError("RATE_LIMITED", "Too many verification email requests", 429);
+
+  const user = await db.user.findUnique({
+    where: { email: data.email },
+    select: { id: true, email: true, status: true, emailVerified: true }
+  });
+
+  if (!user || user.status === "DELETED" || user.status === "SUSPENDED" || user.emailVerified) {
+    return { ok: true, verificationToken: undefined };
+  }
+
+  const rawVerificationToken = randomBytes(32).toString("base64url");
+  const identifier = emailVerificationIdentifier(user.email);
+
+  await db.$transaction([
+    db.verificationToken.deleteMany({ where: { identifier } }),
+    db.verificationToken.create({
+      data: {
+        identifier,
+        token: sha256(rawVerificationToken),
+        expires: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS)
+      }
+    }),
+    db.securityEvent.create({
+      data: {
+        userId: user.id,
+        type: "LOGIN_SUCCESS",
+        severity: "info",
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+        metadata: { event: "email_verification_resent" }
+      }
+    })
+  ]);
+
+  const email = verifyEmailEmail(buildEmailVerificationUrl(user.email, rawVerificationToken));
+  await sendMail({ to: user.email, ...email });
+
+  return {
+    ok: true,
+    verificationToken: process.env.NODE_ENV === "production" ? undefined : rawVerificationToken
+  };
 }
 
 export type UserSafeSelect = Prisma.UserGetPayload<{

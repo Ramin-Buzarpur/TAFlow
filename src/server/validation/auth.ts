@@ -28,6 +28,10 @@ export const forgotPasswordSchema = z.object({
   email: emailSchema
 });
 
+export const resendVerificationEmailSchema = z.object({
+  email: emailSchema
+});
+
 export const resetPasswordSchema = z.object({
   token: z.string().min(20).max(256),
   password: passwordPolicySchema
