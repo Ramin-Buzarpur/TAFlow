@@ -85,3 +85,23 @@
 ### Remaining known gap
 
 - `GradeRecord.score >= 0` is enforced at the database layer. `GradeRecord.score <= GradeItem.maxScore` still needs a durable policy decision and implementation because the upper bound depends on a related `GradeItem` row.
+
+## Phase 2 authorization validation - 2026-07-05
+
+### Fixed / added coverage
+
+| Severity | Finding | Resolution |
+|---|---|---|
+| High | E2E permission coverage only checked a small number of protected APIs and allowed one certificate path to pass as either 403 or 404, which did not tightly prove permission denial. | Expanded `tests/e2e/permissions.spec.ts` with exact 403 assertions and `PERMISSION_DENIED` response checks. |
+| High | Student escalation attempts against course role assignment, gradebook management, TA opportunity creation, and roster export were not covered by API-level E2E regression tests. | Added student negative tests that use real authenticated sessions and real course offering IDs returned by `/api/course-offerings/mine`. |
+| High | Head TA has elevated course permissions, but the no-role-management boundary was only covered by unit-level permission enum tests. | Added an authenticated Head TA E2E test proving `/api/course-offerings/:id/roles` returns 403. |
+
+### Validated
+
+| Check | Result | Notes |
+|---|---|---|
+| `pnpm test:e2e tests/e2e/permissions.spec.ts` | PASS | 8 tests. Validates server-side 403 behavior for student, Head TA, and unauthenticated access paths. |
+
+### Remaining known gap
+
+- Cross-course authorization still needs deeper regression tests: a user who can act in one course must be denied when attempting the same action in another course where they lack the role.

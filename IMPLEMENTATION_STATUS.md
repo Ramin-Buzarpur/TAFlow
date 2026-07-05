@@ -49,4 +49,5 @@ This file tracks implementation state against `10.tex` and the real repository.
 | Partial unique index tests | COMPLETE | `pnpm test:integration` validates active enrollment history, active course-role history, anonymous poll vote dedupe, certificate request in-flight uniqueness, and open regrade request uniqueness. |
 | Survey respondent dedupe | COMPLETE | `pnpm test:integration` validates one answer per survey/question/respondent hash at the database layer. |
 | Grade score upper bound | OPEN | The database enforces `score >= 0`; `score <= GradeItem.maxScore` is still not a database-level invariant because it depends on a related table value. |
-| Permission escalation DB-backed tests | OPEN | Unit-level permission contracts exist; deeper API/DB-backed authorization regression tests are still needed. |
+| Permission escalation API tests | COMPLETE | `pnpm test:e2e tests/e2e/permissions.spec.ts` validates 403 responses for student admin access, self role assignment, gradebook category management, TA opportunity creation, roster export, Head TA role assignment, and unauthenticated protected API access. |
+| Cross-course authorization tests | OPEN | More negative tests are still needed for actors who have permission in one course but attempt the same action in another course. |
