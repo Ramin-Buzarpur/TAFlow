@@ -40,3 +40,13 @@ This file tracks implementation state against `10.tex` and the real repository.
 | Storage and uploads | COMPLETE_BUT_UNVERIFIED | Adapter and MinIO health path are validated; upload/download permission flows still need deeper feature coverage. |
 | Certificates and PDF persistence | COMPLETE_BUT_UNVERIFIED | Storage dependency restored; certificate issue/verify still needs deeper functional coverage beyond the current E2E suite. |
 | Docker-backed local QA | COMPLETE | Docker-backed baseline validation now passes locally. |
+
+## Phase 2 - Database and security hardening
+
+| Area | Status | Evidence |
+|---|---|---|
+| Raw SQL constraint tests | COMPLETE | `pnpm test:integration` validates DB-level rejection for invalid semester and office-hour ranges, invalid grade bounds, negative grade records, and nullable-section course offering uniqueness. |
+| Partial unique index tests | COMPLETE | `pnpm test:integration` validates active enrollment history, active course-role history, anonymous poll vote dedupe, certificate request in-flight uniqueness, and open regrade request uniqueness. |
+| Survey respondent dedupe | COMPLETE | `pnpm test:integration` validates one answer per survey/question/respondent hash at the database layer. |
+| Grade score upper bound | OPEN | The database enforces `score >= 0`; `score <= GradeItem.maxScore` is still not a database-level invariant because it depends on a related table value. |
+| Permission escalation DB-backed tests | OPEN | Unit-level permission contracts exist; deeper API/DB-backed authorization regression tests are still needed. |

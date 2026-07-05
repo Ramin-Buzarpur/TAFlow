@@ -65,3 +65,23 @@
 | `pnpm test` | PASS | 10 files, 33 tests. |
 | `pnpm build` | PASS | Production build completed. |
 | `pnpm test:e2e` | PASS | Normal documented command completed successfully: 23 passed. |
+
+## Phase 2 database constraint validation - 2026-07-05
+
+### Fixed / added coverage
+
+| Severity | Finding | Resolution |
+|---|---|---|
+| High | Raw SQL database constraints and partial unique indexes existed in migrations, but there was no DB-backed regression suite proving they still reject invalid data after future schema changes. | Added `pnpm test:integration` with isolated temporary data that exercises real PostgreSQL constraints and indexes. |
+| High | Active-only history rules for enrollments, course roles, certificate requests, and regrade requests could regress silently if a migration dropped a partial unique index. | The integration suite now verifies both sides of each rule: duplicate active rows are rejected, while terminal/dropped/revoked history permits a fresh row. |
+| Medium | Anonymous poll and survey respondent dedupe depended on database uniqueness semantics that were not validated outside service-level logic. | The integration suite now verifies anonymous poll vote dedupe by respondent hash and survey answer dedupe by survey/question/respondent hash. |
+
+### Validated
+
+| Check | Result | Notes |
+|---|---|---|
+| `pnpm test:integration` | PASS | 1 file, 8 tests. Validates semester and office-hour date ranges, grade bounds, nullable-section course offering uniqueness, active enrollment/course-role history, anonymous poll votes, survey answers, certificate requests, and regrade requests. |
+
+### Remaining known gap
+
+- `GradeRecord.score >= 0` is enforced at the database layer. `GradeRecord.score <= GradeItem.maxScore` still needs a durable policy decision and implementation because the upper bound depends on a related `GradeItem` row.
