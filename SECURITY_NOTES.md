@@ -30,3 +30,12 @@
 - Course-scoped API access is enforced server-side against the requested `courseOfferingId`; a role in Course A does not grant access to protected Course B resources.
 - Unfiltered course-scoped lists for office hours, announcements, and academic calendar events now restrict course rows to active assignments for the caller, while preserving global/admin behavior for non-course rows.
 - The behavior is covered by `tests/e2e/cross-course-authorization.spec.ts` for professor, Head TA, student, and global admin paths, including course material file download and upload/attach authorization.
+
+## Phase 2 file access security and ownership
+
+- File download authorization is attachment-first. Application resumes, course materials, task submissions, assignment submissions, certificate PDFs, and certificate templates are authorized from their parent business record before any signed URL is generated.
+- Generic upload stores files as private and no longer accepts client-controlled visibility. Workflows such as TA application resumes, course materials, task submissions, and assignment submissions promote visibility server-side only after validating ownership and attachment scope.
+- API upload/list responses do not expose `storageKey` or checksum metadata. Possession of a file ID or object key is not enough to download or delete a file.
+- Course material deletion uses the trusted stored key from `UploadedFile` metadata and requires `MANAGE_COURSE_MATERIALS` on the material's course. Generic deletion is limited to unattached owner/admin files; protected attachments are blocked from generic deletion.
+- Object keys are generated server-side with an owner prefix and sanitized filename suffix. Client filenames are display metadata only and are not trusted as storage paths.
+- Known lifecycle limitation: uploaded-but-unattached files do not have a scheduled cleanup job yet, and parent-entity deletion does not guarantee storage-object cleanup for every entity type. Storage delete failures are not retried by a durable outbox worker.

@@ -37,7 +37,7 @@ This file tracks implementation state against `10.tex` and the real repository.
 | TOTP 2FA UX | PARTIAL | Backend/API exist; setup/verification UI still needs completion. |
 | Course-scoped RBAC | COMPLETE | Service-layer permission model is covered by API-level E2E tests, including cross-course isolation. |
 | TA hiring workflow | COMPLETE_BUT_UNVERIFIED | Core workflow exists; file upload dependency is now restored. |
-| Storage and uploads | COMPLETE_BUT_UNVERIFIED | Adapter and MinIO health path are validated; upload/download permission flows still need deeper feature coverage. |
+| Storage and uploads | COMPLETE | Adapter and MinIO health path are validated; file upload, attachment ownership, download authorization, object-key handling, and delete ownership are covered by E2E file-security regression tests. |
 | Certificates and PDF persistence | COMPLETE_BUT_UNVERIFIED | Storage dependency restored; certificate issue/verify still needs deeper functional coverage beyond the current E2E suite. |
 | Docker-backed local QA | COMPLETE | Docker-backed baseline validation now passes locally. |
 
@@ -54,7 +54,7 @@ This file tracks implementation state against `10.tex` and the real repository.
 | Broad unfiltered course lists | COMPLETE | `listOfficeHours`, `listAnnouncements`, and `listAcademicEvents` now restrict course-scoped rows to active course assignments or global admin access when no course filter is supplied. |
 | Phase 2 authentication deep coverage | COMPLETE | `pnpm test` covers the staff 2FA policy; `pnpm test:integration` covers email verification hashing/expiry/single-use/resend/rate limit and password reset hashing/expiry/single-use/session invalidation. |
 | File access cross-course coverage | COMPLETE | The cross-course E2E suite verifies Course B material files are downloadable by global admin and denied to Course A professor, Head TA, and student; it also verifies Course A professor cannot attach a file as Course B material. |
-| File access deep coverage | PARTIAL | Course material cross-course isolation is covered; broader file scenarios such as application resumes and delete ownership still need deeper E2E coverage. |
+| File access deep coverage | COMPLETE | `tests/e2e/file-security.spec.ts` validates application resume isolation, arbitrary fileId denial, cross-course resume/material denial, authorized reviewer/applicant/admin access, delete ownership, server-generated object keys, and CourseMaterial delete behavior. |
 
 ## Phase 2 authentication/account-security validation - 2026-07-05
 
@@ -78,3 +78,29 @@ This file tracks implementation state against `10.tex` and the real repository.
 
 - Dedicated UI pages for resend verification, forgot password, reset password, and 2FA enrollment are still incomplete.
 - TOTP recovery codes are not implemented; the schema has a placeholder field, but there is no production-ready recovery-code workflow yet.
+
+## Phase 2 file access security and ownership - 2026-07-05
+
+### Fixed / added coverage
+
+| Severity | Finding | Resolution |
+|---|---|---|
+| Critical | File download authorization used visibility before fully evaluating the owning business entity, so an attached sensitive file could become too broadly accessible if its visibility was set incorrectly. | Download authorization is now attachment-first for application resumes, course materials, task submissions, assignment submissions, certificate PDFs, and certificate templates before any signed URL is generated. |
+| Critical | TA application resumes were not covered by E2E isolation tests, and resume attachment accepted arbitrary file IDs owned by any user. | Application submission now requires the resume file to be owned by the applicant, not deleted, and not already attached elsewhere; E2E tests prove Student A, Course A professor, and Course A Head TA cannot access Course B/student B resumes. |
+| High | Course material attachment trusted a submitted `fileId` after course permission, allowing a course manager to attach a file they did not upload. | Course material attachment now requires an owned, unattached file and promotes visibility server-side after attachment. |
+| High | Generic file deletion only checked owner/admin and did not understand protected parent entities. | File deletion is now attachment-aware: CourseMaterial deletion requires `MANAGE_COURSE_MATERIALS`; other protected attachments must be deleted through their parent workflow. Unattached files remain owner/admin deletable. |
+| High | Upload API responses exposed internal `storageKey`, and client-submitted visibility was accepted by the generic upload endpoint. | Generic upload always stores files as private unless server-side workflows promote them; upload/list responses no longer expose `storageKey` or checksum metadata. |
+| Medium | Task and assignment submissions accepted arbitrary file IDs from the submitter request. | Submission workflows now require the submitted file to be owned by the actor and unattached, then promote visibility server-side after successful attachment. |
+
+### Validated
+
+| Check | Result | Notes |
+|---|---|---|
+| `pnpm test:e2e tests/e2e/file-security.spec.ts` | PASS | 9 tests. Covers resume isolation, arbitrary fileId denial, cross-course reviewer denial, authorized reviewer/applicant/admin access, delete ownership, object-key non-disclosure/sanitization, and authorized CourseMaterial deletion. |
+
+### Remaining known limitations
+
+- Uploaded-but-unattached files remain in storage until the owner deletes them; there is no scheduled orphan cleanup job yet.
+- Parent-entity deletion relies on current Prisma cascade/set-null behavior and does not automatically remove every backing object from S3/MinIO.
+- If object deletion succeeds but the following metadata update fails, a DB row may point at a missing object; if object deletion fails first, metadata remains active. A full outbox/cleanup worker is not implemented.
+- Antivirus/malware scanning is still not implemented; current validation is MIME allow-list, file-size limit, non-empty file rejection, server-generated object keys, and signed-download authorization.

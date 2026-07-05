@@ -54,3 +54,16 @@
 - بار واقعی production با کاربر همزمان زیاد (فقط burst-test مرورگری روی dev انجام شده؛ ادعای ظرفیت نیازمند deploy واقعی + k6 است).
 - جریان SSO (فعال نیست).
 - ارسال ایمیل واقعی (Mailpit محلی تست شده، SMTP production نه).
+
+## Phase 2 file access security QA - 2026-07-05
+
+| Scenario | Roles / path | Status |
+|---|---|---|
+| Student A cannot download Student B's application resume or unattached file by guessing `fileId`. | Authenticated API: `/api/files/:id` | COMPLETE |
+| Course A professor and Course A Head TA cannot download Course B applicant resumes or Course B material files. | Authenticated API: `/api/files/:id` | COMPLETE |
+| Correct Course B reviewer, applicant, and global admin can access intended files. | Authenticated API: `/api/files/:id` | COMPLETE |
+| User cannot delete another user's file, and Course A role cannot delete Course B material file. | Authenticated API: `DELETE /api/files/:id` | COMPLETE |
+| Authorized Course B material manager can delete Course B material through parent workflow using trusted stored metadata. | Authenticated API: `DELETE /api/course-materials/:id` + DB `deletedAt` check | COMPLETE |
+| Object keys are server-generated, sanitized, and not exposed by upload/list APIs. | Upload API + direct DB verification | COMPLETE |
+
+Remaining untested/known limitation: scheduled cleanup for uploaded-but-unattached files and durable retry/outbox handling for storage deletion failures are not implemented.

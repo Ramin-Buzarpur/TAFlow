@@ -124,7 +124,7 @@
 
 ### Remaining known gap
 
-- Application resume file isolation and file delete ownership still need dedicated E2E coverage.
+- Superseded by the Phase 2 file access security validation below: application resume isolation and file delete ownership now have dedicated E2E coverage.
 
 ## Phase 2 authentication/account-security validation - 2026-07-05
 
@@ -148,3 +148,29 @@
 
 - Dedicated auth UX for resend verification, forgot/reset password, and TOTP enrollment still needs completion.
 - TOTP recovery codes remain a production gap.
+
+## Phase 2 file access security and ownership - 2026-07-05
+
+### Fixed / added coverage
+
+| Severity | Finding | Resolution |
+|---|---|---|
+| Critical | Possession of a sensitive attached file ID could rely too much on `visibility` instead of the parent business entity. | `getFileDownloadUrl` now authorizes by attachment context before generating signed URLs: resume, course material, task submission, assignment submission, certificate PDF, and certificate template each follow their parent policy. |
+| Critical | Resume file isolation was not proven for cross-student or cross-course reviewers. | Added E2E coverage proving Student A, Course A professor, and Course A Head TA cannot download Student B/Course B resumes, while the applicant, Course B reviewer, and global admin can. |
+| High | Course material and TA application attachment paths accepted arbitrary file IDs after checking only the parent action permission. | Attachment now requires an owned, undeleted, unattached file; server-side workflows promote visibility after successful attachment. |
+| High | Generic file delete was owner/admin-only and did not account for files attached to protected business entities. | Delete is now attachment-aware. Course material files require course-material management permission; other protected attachments are blocked from generic deletion and must use parent workflows. |
+| High | Generic upload/list responses exposed storage object keys, and the upload route accepted client-supplied visibility. | API responses no longer expose `storageKey`; generic upload ignores client visibility and stores private files by default. |
+| Medium | Object key generation was not covered by regression tests. | Added E2E coverage for malicious filenames, server-generated owner-prefixed keys, path separator sanitization, and object-key non-disclosure. |
+
+### Validated
+
+| Check | Result | Notes |
+|---|---|---|
+| `pnpm test:e2e tests/e2e/file-security.spec.ts` | PASS | 9 tests. |
+
+### Remaining known limitations
+
+- Uploaded-but-unattached files are not cleaned up automatically.
+- Parent deletion does not yet guarantee object cleanup for every parent entity type.
+- Storage deletion and DB metadata updates are not backed by an outbox/retry worker.
+- Malware scanning still requires an external scanner and is not implemented.

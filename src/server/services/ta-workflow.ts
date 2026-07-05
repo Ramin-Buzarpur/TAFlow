@@ -9,6 +9,7 @@ import { notifyUser } from "@/server/services/notifications";
 import { jsonSafe } from "@/server/utils/json";
 import { computeApplicationScore } from "@/server/services/scoring";
 import { checkRateLimit, makeRateLimitKey } from "@/server/auth/rate-limit";
+import { requireAttachableOwnedFile } from "@/server/services/files";
 
 const APPLICATION_INCLUDE = {
   opportunity: { include: { courseOffering: { include: { course: true, semester: true } } } },
@@ -132,6 +133,7 @@ export async function submitTAApplication(userId: string, input: {
 
   const formConfig = readFormConfig(opportunity.formConfigJson);
   const resumeFileId = formConfig && !formConfig.builtIn.resume ? undefined : input.resumeFileId;
+  if (resumeFileId) await requireAttachableOwnedFile(userId, resumeFileId);
   if (formConfig) {
     for (const field of formConfig.customFields) {
       if (field.required && (input.customFields?.[field.key] === undefined || input.customFields?.[field.key] === "")) {
@@ -144,16 +146,20 @@ export async function submitTAApplication(userId: string, input: {
     ? Object.fromEntries(Object.entries(input.customFields).filter(([key]) => allowedKeys.has(key)))
     : undefined;
 
-  const application = await db.tAApplication.create({
-    data: {
-      opportunityId: input.opportunityId,
-      applicantId: userId,
-      requestedRole: input.requestedRole,
-      motivationText: input.motivationText,
-      resumeFileId,
-      customFieldsJson: customFieldsToStore && Object.keys(customFieldsToStore).length ? jsonSafe(customFieldsToStore) : undefined
-    },
-    include: APPLICATION_INCLUDE
+  const application = await db.$transaction(async (tx) => {
+    const created = await tx.tAApplication.create({
+      data: {
+        opportunityId: input.opportunityId,
+        applicantId: userId,
+        requestedRole: input.requestedRole,
+        motivationText: input.motivationText,
+        resumeFileId,
+        customFieldsJson: customFieldsToStore && Object.keys(customFieldsToStore).length ? jsonSafe(customFieldsToStore) : undefined
+      },
+      include: APPLICATION_INCLUDE
+    });
+    if (resumeFileId) await tx.uploadedFile.update({ where: { id: resumeFileId }, data: { visibility: "COURSE_STAFF" } });
+    return created;
   });
   await notifyUser({ userId: opportunity.createdById, type: "APPLICATION_STATUS", title: "درخواست جدید TA", body: opportunity.title, href: `/applications/${application.id}` });
   await writeAuditLog({ actorId: userId, action: "CREATE", entityType: "TAApplication", entityId: application.id, courseOfferingId: opportunity.courseOfferingId, afterJson: application });

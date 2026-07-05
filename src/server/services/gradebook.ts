@@ -6,6 +6,7 @@ import { coursePermissions, isGlobalAdmin } from "@/server/auth/permissions";
 import { canAccessCourseOffering, requireCoursePermission, getCourseRoleNames } from "@/server/services/rbac";
 import { writeAuditLog } from "@/server/services/audit";
 import { notifyUser } from "@/server/services/notifications";
+import { requireAttachableOwnedFile } from "@/server/services/files";
 
 export type GradeImportRow = { row: number; studentNumber: string; score: number | null; status: "ok" | "error"; message?: string; studentId?: string };
 
@@ -184,11 +185,16 @@ export async function submitAssignment(actorId: string, gradeItemId: string, fil
   if (!item) throw new AppError("NOT_FOUND", "Grade item not found", 404);
   const enrolled = await db.courseEnrollment.findFirst({ where: { courseOfferingId: item.courseOfferingId, studentId: actorId, droppedAt: null } });
   if (!enrolled) throw new PermissionError("Only enrolled students can submit this assignment");
-  const submission = await db.assignmentSubmission.upsert({
-    where: { gradeItemId_studentId: { gradeItemId, studentId: actorId } },
-    create: { gradeItemId, studentId: actorId, fileId, note },
-    update: { fileId, note, submittedAt: new Date() },
-    include: { file: { select: { id: true, originalName: true } } }
+  await requireAttachableOwnedFile(actorId, fileId);
+  const submission = await db.$transaction(async (tx) => {
+    const updated = await tx.assignmentSubmission.upsert({
+      where: { gradeItemId_studentId: { gradeItemId, studentId: actorId } },
+      create: { gradeItemId, studentId: actorId, fileId, note },
+      update: { fileId, note, submittedAt: new Date() },
+      include: { file: { select: { id: true, originalName: true } } }
+    });
+    await tx.uploadedFile.update({ where: { id: fileId }, data: { visibility: "COURSE_STAFF" } });
+    return updated;
   });
   // Late submissions are accepted but flagged (standard LMS behavior) —
   // "late" is derived from dueAt vs submittedAt, no stored flag to drift.

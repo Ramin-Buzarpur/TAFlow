@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID, createHash } from "node:crypto";
-import type { FileVisibility } from "@prisma/client";
+import type { FileVisibility, Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { AppError, PermissionError } from "@/server/errors";
 import { isGlobalAdmin } from "@/server/auth/permissions";
@@ -22,6 +22,28 @@ export function validateUpload(meta: { mimeType: string; sizeBytes: number }) {
 
 function sanitizeFileName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120);
+}
+
+const FILE_AUTH_INCLUDE = {
+  applicationResume: { include: { opportunity: true } },
+  courseMaterial: true,
+  taskSubmission: { include: { task: true } },
+  assignmentSubmission: { include: { gradeItem: true } },
+  certificatePdf: { include: { request: true } },
+  certificateTemplate: true
+} satisfies Prisma.UploadedFileInclude;
+
+type FileWithAuthContext = Prisma.UploadedFileGetPayload<{ include: typeof FILE_AUTH_INCLUDE }>;
+
+function hasBusinessAttachment(file: FileWithAuthContext) {
+  return Boolean(
+    file.applicationResume ||
+    file.courseMaterial ||
+    file.taskSubmission ||
+    file.assignmentSubmission ||
+    file.certificatePdf ||
+    file.certificateTemplate
+  );
 }
 
 export async function uploadFile(actorId: string, input: { buffer: Buffer; originalName: string; mimeType: string; visibility?: FileVisibility }) {
@@ -49,21 +71,36 @@ export async function uploadFile(actorId: string, input: { buffer: Buffer; origi
 export async function getFileDownloadUrl(actorId: string, fileId: string) {
   const file = await db.uploadedFile.findUnique({
     where: { id: fileId },
-    include: { applicationResume: { include: { opportunity: true } }, courseMaterial: true }
+    include: FILE_AUTH_INCLUDE
   });
   if (!file || file.deletedAt) throw new AppError("NOT_FOUND", "File not found", 404);
 
-  if (file.ownerId !== actorId && file.visibility !== "PUBLIC") {
-    const user = await db.user.findUnique({ where: { id: actorId }, select: { globalRole: true } });
-    const admin = user ? isGlobalAdmin(user.globalRole) : false;
-    if (!admin) {
-      if (file.visibility === "COURSE_STAFF" && file.applicationResume) {
+  const user = await db.user.findUnique({ where: { id: actorId }, select: { globalRole: true } });
+  const admin = user ? isGlobalAdmin(user.globalRole) : false;
+
+  if (!admin) {
+    if (file.applicationResume) {
+      if (file.applicationResume.applicantId !== actorId) {
         await requireCoursePermission(actorId, file.applicationResume.opportunity.courseOfferingId, coursePermissions.REVIEW_TA_APPLICATION);
-      } else if (file.courseMaterial) {
-        if (!(await canAccessCourseOffering(actorId, file.courseMaterial.courseOfferingId))) throw new PermissionError();
-      } else {
-        throw new PermissionError();
       }
+    } else if (file.courseMaterial) {
+      if (!(await canAccessCourseOffering(actorId, file.courseMaterial.courseOfferingId))) throw new PermissionError();
+    } else if (file.taskSubmission) {
+      if (file.taskSubmission.userId !== actorId) {
+        await requireCoursePermission(actorId, file.taskSubmission.task.courseOfferingId, coursePermissions.MANAGE_OFFICE_HOUR);
+      }
+    } else if (file.assignmentSubmission) {
+      if (file.assignmentSubmission.studentId !== actorId) {
+        await requireCoursePermission(actorId, file.assignmentSubmission.gradeItem.courseOfferingId, coursePermissions.MANAGE_GRADEBOOK);
+      }
+    } else if (file.certificatePdf) {
+      if (file.certificatePdf.request.userId !== actorId) {
+        await requireCoursePermission(actorId, file.certificatePdf.request.courseOfferingId, coursePermissions.APPROVE_CERTIFICATE);
+      }
+    } else if (file.certificateTemplate) {
+      throw new PermissionError();
+    } else if (file.ownerId !== actorId) {
+      throw new PermissionError();
     }
   }
 
@@ -72,19 +109,49 @@ export async function getFileDownloadUrl(actorId: string, fileId: string) {
   return { url, file };
 }
 
-export async function deleteFile(actorId: string, fileId: string) {
-  const file = await db.uploadedFile.findUnique({ where: { id: fileId } });
+export async function requireAttachableOwnedFile(actorId: string, fileId: string) {
+  const file = await db.uploadedFile.findUnique({ where: { id: fileId }, include: FILE_AUTH_INCLUDE });
   if (!file || file.deletedAt) throw new AppError("NOT_FOUND", "File not found", 404);
-  if (file.ownerId !== actorId) {
-    const user = await db.user.findUnique({ where: { id: actorId }, select: { globalRole: true } });
-    if (!user || !isGlobalAdmin(user.globalRole)) throw new PermissionError();
-  }
-  await db.uploadedFile.update({ where: { id: fileId }, data: { deletedAt: new Date() } });
+  if (file.ownerId !== actorId) throw new PermissionError("Only the file owner can attach this file");
+  if (hasBusinessAttachment(file)) throw new AppError("FILE_ALREADY_ATTACHED", "File is already attached to another record", 409);
+  return file;
+}
+
+async function deleteStoredFile(file: { id: string; storageKey: string }) {
   await deleteObject(file.storageKey);
+  await db.uploadedFile.update({ where: { id: file.id }, data: { deletedAt: new Date() } });
+}
+
+export async function deleteFile(actorId: string, fileId: string) {
+  const file = await db.uploadedFile.findUnique({ where: { id: fileId }, include: FILE_AUTH_INCLUDE });
+  if (!file || file.deletedAt) throw new AppError("NOT_FOUND", "File not found", 404);
+
+  const user = await db.user.findUnique({ where: { id: actorId }, select: { globalRole: true } });
+  const admin = user ? isGlobalAdmin(user.globalRole) : false;
+
+  if (file.courseMaterial) {
+    await requireCoursePermission(actorId, file.courseMaterial.courseOfferingId, coursePermissions.MANAGE_COURSE_MATERIALS);
+    await deleteObject(file.storageKey);
+    await db.$transaction([
+      db.courseMaterial.delete({ where: { id: file.courseMaterial.id } }),
+      db.uploadedFile.update({ where: { id: file.id }, data: { deletedAt: new Date() } })
+    ]);
+    await writeAuditLog({ actorId, action: "DELETE", entityType: "CourseMaterial", entityId: file.courseMaterial.id, courseOfferingId: file.courseMaterial.courseOfferingId });
+  } else if (hasBusinessAttachment(file)) {
+    throw new PermissionError("Attached files must be deleted through their parent workflow");
+  } else {
+    if (file.ownerId !== actorId && !admin) throw new PermissionError();
+    await deleteStoredFile(file);
+  }
+
   await writeAuditLog({ actorId, action: "DELETE", entityType: "UploadedFile", entityId: fileId });
   return { id: fileId, deleted: true };
 }
 
 export async function listMyFiles(actorId: string) {
-  return db.uploadedFile.findMany({ where: { ownerId: actorId, deletedAt: null }, orderBy: { createdAt: "desc" } });
+  return db.uploadedFile.findMany({
+    where: { ownerId: actorId, deletedAt: null },
+    select: { id: true, ownerId: true, originalName: true, mimeType: true, sizeBytes: true, visibility: true, createdAt: true, deletedAt: true },
+    orderBy: { createdAt: "desc" }
+  });
 }

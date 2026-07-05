@@ -6,6 +6,7 @@ import { coursePermissions } from "@/server/auth/permissions";
 import { canAccessCourseOffering, requireCoursePermission } from "@/server/services/rbac";
 import { writeAuditLog } from "@/server/services/audit";
 import { notifyUser } from "@/server/services/notifications";
+import { requireAttachableOwnedFile } from "@/server/services/files";
 
 export async function createTask(actorId: string, input: { courseOfferingId: string; title: string; description?: string; assigneeId?: string; estimatedMinutes?: number; dueAt?: Date }) {
   await requireCoursePermission(actorId, input.courseOfferingId, coursePermissions.MANAGE_OFFICE_HOUR);
@@ -28,13 +29,18 @@ export async function submitTask(actorId: string, taskId: string, fileId: string
   const task = await db.task.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError("NOT_FOUND", "Task not found", 404);
   if (task.assigneeId !== actorId) throw new PermissionError("Only the assigned TA can submit this task");
+  await requireAttachableOwnedFile(actorId, fileId);
   // One active submission per task/user: resubmitting replaces the file, it
   // doesn't need history the way role assignments do.
-  const submission = await db.taskSubmission.upsert({
-    where: { taskId_userId: { taskId, userId: actorId } },
-    create: { taskId, userId: actorId, fileId, note },
-    update: { fileId, note, submittedAt: new Date() },
-    include: { file: { select: { id: true, originalName: true } } }
+  const submission = await db.$transaction(async (tx) => {
+    const updated = await tx.taskSubmission.upsert({
+      where: { taskId_userId: { taskId, userId: actorId } },
+      create: { taskId, userId: actorId, fileId, note },
+      update: { fileId, note, submittedAt: new Date() },
+      include: { file: { select: { id: true, originalName: true } } }
+    });
+    await tx.uploadedFile.update({ where: { id: fileId }, data: { visibility: "COURSE_STAFF" } });
+    return updated;
   });
   // Late deliveries are accepted but flagged, same policy as assignment
   // submissions — derived from dueAt, not stored.
