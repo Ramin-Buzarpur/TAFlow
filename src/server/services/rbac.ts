@@ -69,6 +69,32 @@ export async function canAccessCourseOffering(userId: string, courseOfferingId: 
   return permissions.has(coursePermissions.VIEW_COURSE);
 }
 
+export async function listAccessibleCourseOfferingIds(userId: string): Promise<string[]> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { globalRole: true, status: true }
+  });
+
+  if (!user || user.status !== "ACTIVE") throw new PermissionError("User is not active");
+  if (isGlobalAdmin(user.globalRole)) {
+    const offerings = await db.courseOffering.findMany({ select: { id: true } });
+    return offerings.map((offering) => offering.id);
+  }
+
+  const now = new Date();
+  const roles = await db.courseRoleAssignment.findMany({
+    where: {
+      userId,
+      revokedAt: null,
+      activeFrom: { lte: now },
+      OR: [{ activeUntil: null }, { activeUntil: { gt: now } }]
+    },
+    select: { courseOfferingId: true }
+  });
+
+  return Array.from(new Set(roles.map((role) => role.courseOfferingId)));
+}
+
 export async function listMyCourseOfferings(userId: string) {
   const now = new Date();
   const roles = await db.courseRoleAssignment.findMany({

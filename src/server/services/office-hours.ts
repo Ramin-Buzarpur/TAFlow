@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/server/db";
 import { AppError, PermissionError } from "@/server/errors";
 import { coursePermissions } from "@/server/auth/permissions";
-import { canAccessCourseOffering, requireCoursePermission } from "@/server/services/rbac";
+import { canAccessCourseOffering, listAccessibleCourseOfferingIds, requireCoursePermission } from "@/server/services/rbac";
 import { writeAuditLog } from "@/server/services/audit";
 import { notifyUser } from "@/server/services/notifications";
 
@@ -17,8 +17,12 @@ export async function createOfficeHour(actorId: string, input: { courseOfferingI
 
 export async function listOfficeHours(actorId: string, opts: { courseOfferingId?: string; upcoming?: boolean; take?: number }) {
   if (opts.courseOfferingId && !(await canAccessCourseOffering(actorId, opts.courseOfferingId))) throw new PermissionError();
+  const accessibleCourseOfferingIds = opts.courseOfferingId ? undefined : await listAccessibleCourseOfferingIds(actorId);
   return db.officeHourSession.findMany({
-    where: { ...(opts.courseOfferingId ? { courseOfferingId: opts.courseOfferingId } : {}), ...(opts.upcoming ? { startsAt: { gte: new Date() }, status: { in: ["SCHEDULED", "LIVE"] } } : {}) },
+    where: {
+      ...(opts.courseOfferingId ? { courseOfferingId: opts.courseOfferingId } : { courseOfferingId: { in: accessibleCourseOfferingIds } }),
+      ...(opts.upcoming ? { startsAt: { gte: new Date() }, status: { in: ["SCHEDULED", "LIVE"] } } : {})
+    },
     include: { courseOffering: { include: { course: true, semester: true } }, host: { select: { id: true, name: true, email: true } } },
     orderBy: { startsAt: opts.upcoming ? "asc" : "desc" },
     take: opts.take ?? 30

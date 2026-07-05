@@ -25,3 +25,8 @@
 ## پاسخ کوتاه به «آیا هک می‌شود؟»
 
 هیچ سیستمی «غیرقابل نفوذ» نیست؛ ادعای آن نشانه‌ی ناآگاهی است. سطح حمله‌ی استاندارد وب پوشش داده شده: SQL injection از طریق Prisma parameterized ناممکن است، XSS با escape پیش‌فرض React + sanitize بدنه‌ی پیام‌ها مهار می‌شود، CSRF با Origin check + SameSite، brute-force با Argon2id + قفل حساب + rate limit، و session hijacking با عمر کوتاه JWT + باطل‌سازی بعد از تغییر رمز محدود می‌شود. آنچه می‌ماند، ریسک‌های لایه‌ی زیرساخت و عامل انسانی است که خارج از کد این ریپو است.
+## Phase 2 cross-course isolation
+
+- Course-scoped API access is enforced server-side against the requested `courseOfferingId`; a role in Course A does not grant access to protected Course B resources.
+- Unfiltered course-scoped lists for office hours, announcements, and academic calendar events now restrict course rows to active assignments for the caller, while preserving global/admin behavior for non-course rows.
+- The behavior is covered by `tests/e2e/cross-course-authorization.spec.ts` for professor, Head TA, student, and global admin paths, including course material file download and upload/attach authorization.

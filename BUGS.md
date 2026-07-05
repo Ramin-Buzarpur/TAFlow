@@ -105,3 +105,23 @@
 ### Remaining known gap
 
 - Cross-course authorization still needs deeper regression tests: a user who can act in one course must be denied when attempting the same action in another course where they lack the role.
+
+## Phase 2 cross-course authorization validation - 2026-07-05
+
+### Fixed / added coverage
+
+| Severity | Finding | Resolution |
+|---|---|---|
+| Critical | Course-scoped list endpoints could expose rows from courses where the caller had no active role when the request omitted `courseOfferingId`. | Unfiltered office-hour sessions, announcements, and academic calendar events are now restricted to the caller's accessible course offerings, while global/admin-visible non-course rows remain visible. |
+| High | Course A roles were not covered by an E2E regression suite that proved they cannot be reused against Course B resources. | Added `tests/e2e/cross-course-authorization.spec.ts`, which creates an isolated Course B through admin APIs and verifies professor, Head TA, and student denials against protected Course B resources, including course material files. |
+| High | Head TA elevated Course A permissions needed explicit negative coverage for Course B gradebook, roster, role management, sessions, surveys, and polls. | Added API-level E2E assertions that these calls return `PERMISSION_DENIED` for Course B while allowed Course A gradebook/roster access still works. |
+
+### Validated
+
+| Check | Result | Notes |
+|---|---|---|
+| `pnpm test:e2e tests/e2e/cross-course-authorization.spec.ts` | PASS | 6 tests. Validates global admin success, professor Course A to Course B denial, Head TA Course A to Course B denial, student Course A to Course B private-resource denial, course material file isolation, and no unfiltered session/announcement/calendar leakage. |
+
+### Remaining known gap
+
+- Application resume file isolation and file delete ownership still need dedicated E2E coverage.

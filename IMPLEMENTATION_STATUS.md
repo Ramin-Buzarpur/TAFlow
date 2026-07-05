@@ -35,7 +35,7 @@ This file tracks implementation state against `10.tex` and the real repository.
 | Email verification UX | PARTIAL | API exists; dedicated UI flow still needs completion. |
 | Password reset UX | PARTIAL | API exists; dedicated UI flow still needs completion. |
 | TOTP 2FA UX | PARTIAL | Backend/API exist; setup/verification UI still needs completion. |
-| Course-scoped RBAC | COMPLETE_BUT_UNVERIFIED | Service-layer permission model exists; DB-backed e2e requires local database. |
+| Course-scoped RBAC | COMPLETE | Service-layer permission model is covered by API-level E2E tests, including cross-course isolation. |
 | TA hiring workflow | COMPLETE_BUT_UNVERIFIED | Core workflow exists; file upload dependency is now restored. |
 | Storage and uploads | COMPLETE_BUT_UNVERIFIED | Adapter and MinIO health path are validated; upload/download permission flows still need deeper feature coverage. |
 | Certificates and PDF persistence | COMPLETE_BUT_UNVERIFIED | Storage dependency restored; certificate issue/verify still needs deeper functional coverage beyond the current E2E suite. |
@@ -50,4 +50,8 @@ This file tracks implementation state against `10.tex` and the real repository.
 | Survey respondent dedupe | COMPLETE | `pnpm test:integration` validates one answer per survey/question/respondent hash at the database layer. |
 | Grade score upper bound | OPEN | The database enforces `score >= 0`; `score <= GradeItem.maxScore` is still not a database-level invariant because it depends on a related table value. |
 | Permission escalation API tests | COMPLETE | `pnpm test:e2e tests/e2e/permissions.spec.ts` validates 403 responses for student admin access, self role assignment, gradebook category management, TA opportunity creation, roster export, Head TA role assignment, and unauthenticated protected API access. |
-| Cross-course authorization tests | OPEN | More negative tests are still needed for actors who have permission in one course but attempt the same action in another course. |
+| Cross-course authorization tests | COMPLETE | `pnpm test:e2e tests/e2e/cross-course-authorization.spec.ts` validates Course A roles do not grant Course B gradebook, roster, role management, sessions, surveys, polls, announcements, calendar, file download, or course material upload access; unfiltered session/announcement/calendar lists are scoped to accessible courses. |
+| Broad unfiltered course lists | COMPLETE | `listOfficeHours`, `listAnnouncements`, and `listAcademicEvents` now restrict course-scoped rows to active course assignments or global admin access when no course filter is supplied. |
+| Phase 2 authentication deep coverage | PARTIAL | Core auth exists, but dedicated E2E coverage for email verification, reset-token expiry/single-use, mandatory staff 2FA, and recovery-code policy remains incomplete. |
+| File access cross-course coverage | COMPLETE | The cross-course E2E suite verifies Course B material files are downloadable by global admin and denied to Course A professor, Head TA, and student; it also verifies Course A professor cannot attach a file as Course B material. |
+| File access deep coverage | PARTIAL | Course material cross-course isolation is covered; broader file scenarios such as application resumes and delete ownership still need deeper E2E coverage. |
