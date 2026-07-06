@@ -73,6 +73,57 @@ button, .btn, a { -webkit-tap-highlight-color: transparent; }
   animation: brand-shine 5.5s ease-in-out infinite;
   pointer-events: none;
 }
+
+.brand-animator {
+  position: relative;
+  display: inline-grid;
+  grid-template-areas: "stack";
+  align-items: center;
+  justify-items: start;
+  min-width: 17ch;
+  white-space: nowrap;
+}
+
+.brand-animator__sizer,
+.brand-animator__text,
+.brand-animator__cursor {
+  grid-area: stack;
+}
+
+.brand-animator__sizer {
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.brand-animator__text {
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand-animator__cursor {
+  justify-self: end;
+  width: 2px;
+  height: 1.05em;
+  margin-inline-start: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: .85;
+  animation: brand-cursor 1s steps(1, end) infinite;
+}
+
+.brand-animator--landing {
+  min-width: 27ch;
+}
+
+.brand-animator--compact {
+  min-width: 27ch;
+}
+
+@keyframes brand-cursor {
+  50% { opacity: 0; }
+}
+
 .brand-caption {
   color: var(--muted);
   font-size: 13px;

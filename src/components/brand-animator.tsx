@@ -40,6 +40,9 @@ export function BrandAnimator({ className }: { className?: string }) {
 
   return (
     <span className={clsx("brand-animator", className)} aria-live="polite" aria-atomic="true">
+      <span className="brand-animator__sizer" aria-hidden="true">
+        {BRAND_FRAMES[1]}
+      </span>
       <span className="brand-animator__text">{text || "\u00A0"}</span>
       <span className="brand-animator__cursor" aria-hidden="true" />
     </span>
