@@ -233,7 +233,10 @@ enum SecurityEventType {
   PASSWORD_RESET_REQUESTED
   PASSWORD_CHANGED
   TWO_FACTOR_ENABLED
+  TWO_FACTOR_DISABLED
   TWO_FACTOR_FAILED
+  RECOVERY_CODES_GENERATED
+  RECOVERY_CODE_USED
   RATE_LIMITED
   PERMISSION_DENIED
   SUSPICIOUS_EXPORT
@@ -251,6 +254,7 @@ model User {
   mustChangePassword      Boolean                    @default(false)
   twoFactorEnabled        Boolean                    @default(false)
   twoFactorRequired       Boolean                    @default(false)
+  twoFactorChangedAt      DateTime?
   image                   String?
   globalRole              GlobalRole                 @default(STUDENT)
   status                  UserStatus                 @default(PENDING_EMAIL)
@@ -265,6 +269,7 @@ model User {
   accounts                Account[]
   sessions                Session[]
   twoFactorMethods        TwoFactorMethod[]
+  twoFactorRecoveryCodes  TwoFactorRecoveryCode[]
   uploadedFiles           UploadedFile[]             @relation("UserUploadedFiles")
   courseEnrollments       CourseEnrollment[]         @relation("StudentEnrollments")
   courseRoles             CourseRoleAssignment[]     @relation("CourseRoleAssignee")
@@ -364,6 +369,18 @@ model TwoFactorMethod {
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model TwoFactorRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+  @@index([userId, usedAt])
 }
 
 model StudentProfile {

@@ -20,8 +20,11 @@ export default async function globalSetup(config: FullConfig) {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
   const baseURL = (config.projects[0]?.use?.baseURL as string) || "http://localhost:3000";
   const browser = await chromium.launch({ channel: "msedge" });
+  const accounts = process.env.AUTH_ENFORCE_2FA_FOR_STAFF === "true"
+    ? ACCOUNTS.filter((account) => account.file === "student" || account.file === "headta")
+    : ACCOUNTS;
 
-  for (const account of ACCOUNTS) {
+  for (const account of accounts) {
     const context = await browser.newContext({ baseURL });
     const page = await context.newPage();
     await page.goto("/login");

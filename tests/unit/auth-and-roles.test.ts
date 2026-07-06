@@ -16,6 +16,11 @@ describe("auth validation", () => {
     const result = loginSchema.safeParse({ email: "student@example.edu", password: "Strong@123456", totpCode: "123456" });
     expect(result.success).toBe(true);
   });
+
+  it("accepts optional recovery code during login", () => {
+    const result = loginSchema.safeParse({ email: "student@example.edu", password: "Strong@123456", recoveryCode: "ABCD-EFGH-IJKL" });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("staff 2FA policy", () => {
@@ -28,6 +33,10 @@ describe("staff 2FA policy", () => {
     expect(staffRoleRequiresTwoFactor("PROFESSOR", "true")).toBe(true);
     expect(staffRoleRequiresTwoFactor("EDUCATION_ADMIN", "true")).toBe(true);
     expect(staffRoleRequiresTwoFactor("SYSTEM_ADMIN", "true")).toBe(true);
+    expect(staffRoleRequiresTwoFactor("STUDENT", "true")).toBe(false);
+  });
+
+  it("does not treat course-scoped Head TA as a global staff role", () => {
     expect(staffRoleRequiresTwoFactor("STUDENT", "true")).toBe(false);
   });
 });

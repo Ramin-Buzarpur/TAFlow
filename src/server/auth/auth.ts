@@ -11,6 +11,7 @@ import { verifyTotpCode } from "@/server/auth/totp";
 import { getRequestMeta } from "@/server/auth/request";
 import { jsonSafe } from "@/server/utils/json";
 import { staffRoleRequiresTwoFactor } from "@/server/auth/two-factor-policy";
+import { consumeRecoveryCode } from "@/server/services/two-factor";
 
 // How stale a JWT session may be before it's re-checked against the user row.
 // This bounds how long a revoked/suspended account or a pre-password-change
@@ -42,7 +43,8 @@ const providers: NextAuthConfig["providers"] = [
     credentials: {
       email: { label: "Email", type: "email" },
       password: { label: "Password", type: "password" },
-      totpCode: { label: "2FA", type: "text" }
+      totpCode: { label: "2FA", type: "text" },
+      recoveryCode: { label: "Recovery code", type: "text" }
     },
     async authorize(credentials) {
       const parsed = loginSchema.safeParse(credentials);
@@ -80,6 +82,7 @@ const providers: NextAuthConfig["providers"] = [
           twoFactorRequired: true,
           timezone: true,
           twoFactorMethods: {
+            where: { lastUsedAt: { not: null } },
             select: { id: true, encryptedSecret: true },
             orderBy: { enabledAt: "desc" },
             take: 1
@@ -119,23 +122,46 @@ const providers: NextAuthConfig["providers"] = [
       const mustVerify2fa = user.twoFactorEnabled || user.twoFactorRequired || staffRoleRequiresTwoFactor(user.globalRole);
       if (mustVerify2fa) {
         const method = user.twoFactorMethods[0];
-        if (!method || !parsed.data.totpCode) {
+        if (!method) {
           await recordSecurityEvent({
             userId: user.id,
             type: "TWO_FACTOR_FAILED",
             severity: "warning",
-            metadata: { reason: method ? "missing_totp" : "missing_2fa_method" }
+            metadata: { reason: "missing_2fa_method" }
           });
           return null;
         }
 
-        const totpOk = verifyTotpCode(method.encryptedSecret, parsed.data.totpCode);
-        if (!totpOk) {
-          await recordSecurityEvent({ userId: user.id, type: "TWO_FACTOR_FAILED", severity: "warning" });
-          return null;
-        }
+        if (parsed.data.recoveryCode) {
+          try {
+            await consumeRecoveryCode(user.id, parsed.data.recoveryCode);
+          } catch {
+            await recordSecurityEvent({ userId: user.id, type: "TWO_FACTOR_FAILED", severity: "warning", metadata: { reason: "invalid_recovery_code" } });
+            return null;
+          }
+        } else {
+          if (!parsed.data.totpCode) {
+            await recordSecurityEvent({
+              userId: user.id,
+              type: "TWO_FACTOR_FAILED",
+              severity: "warning",
+              metadata: { reason: "missing_totp" }
+            });
+            return null;
+          }
+          const limiter2fa = await checkRateLimit(makeRateLimitKey("2fa-login-verify", meta.ipAddress, user.id), 8, 15 * 60 * 1000);
+          if (!limiter2fa.allowed) {
+            await recordSecurityEvent({ userId: user.id, type: "RATE_LIMITED", severity: "warning", metadata: { reason: "2fa_login" } });
+            return null;
+          }
+          const totpOk = verifyTotpCode(method.encryptedSecret, parsed.data.totpCode);
+          if (!totpOk) {
+            await recordSecurityEvent({ userId: user.id, type: "TWO_FACTOR_FAILED", severity: "warning" });
+            return null;
+          }
 
-        await db.twoFactorMethod.update({ where: { id: method.id }, data: { lastUsedAt: new Date() } });
+          await db.twoFactorMethod.update({ where: { id: method.id }, data: { lastUsedAt: new Date() } });
+        }
       }
 
       await db.user.update({
@@ -205,11 +231,12 @@ export const authConfig = {
       if (token.id && Date.now() - revalidatedAt > SESSION_REVALIDATE_MS) {
         const fresh = await db.user.findUnique({
           where: { id: token.id as string },
-          select: { status: true, globalRole: true, passwordChangedAt: true }
+          select: { status: true, globalRole: true, passwordChangedAt: true, twoFactorChangedAt: true }
         });
         if (!fresh || fresh.status !== "ACTIVE") return null;
         const authTime = typeof token.authTime === "number" ? token.authTime : 0;
         if (fresh.passwordChangedAt && fresh.passwordChangedAt.getTime() > authTime) return null;
+        if (fresh.twoFactorChangedAt && fresh.twoFactorChangedAt.getTime() > authTime) return null;
         token.status = fresh.status;
         token.globalRole = fresh.globalRole;
         token.revalidatedAt = Date.now();

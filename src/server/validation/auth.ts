@@ -21,7 +21,8 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1).max(128),
-  totpCode: z.string().regex(/^\d{6}$/).optional()
+  totpCode: z.string().regex(/^\d{6}$/).optional(),
+  recoveryCode: z.string().trim().min(8).max(64).optional()
 });
 
 export const forgotPasswordSchema = z.object({
