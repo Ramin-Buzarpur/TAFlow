@@ -4,7 +4,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { MobileNav } from "./mobile-nav";
 import { UserMenu } from "./user-menu";
 import { NotificationBell } from "./notification-bell";
-import { NAV_LINKS } from "./nav-links";
+import { navLinksForRole } from "./nav-links";
 import { NAV_ICONS } from "./nav-icons";
 import { BrandAnimator } from "./brand-animator";
 
@@ -19,6 +19,7 @@ export { Card, Badge, Kpi, StatusBadge } from "./primitives";
 export async function Topbar() {
   const session = await auth();
   const user = session?.user;
+  const navLinks = navLinksForRole(user?.globalRole);
   return (
     <header className="topbar">
       <div className="shell topbar__inner">
@@ -29,13 +30,25 @@ export async function Topbar() {
           </span>
         </Link>
         <nav className="navlinks topbar__nav">
-          {NAV_LINKS.map(({ href, label, icon }) => {
+          {navLinks.map(({ href, label, icon, children }) => {
             const Icon = NAV_ICONS[icon];
             return (
-              <Link href={href} key={href}>
-                <Icon size={16} />
-                <span>{label}</span>
-              </Link>
+              <div className="navlinks__item" key={href}>
+                <Link href={href} className="navlinks__trigger" aria-haspopup={children?.length ? "true" : undefined}>
+                  <Icon size={16} />
+                  <span>{label}</span>
+                </Link>
+                {children?.length ? (
+                  <div className="navlinks__menu">
+                    {children.map((child) => (
+                      <Link href={child.href} className="navlinks__menu-link" key={child.href}>
+                        <strong>{child.label}</strong>
+                        <span>{child.description}</span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             );
           })}
         </nav>
@@ -46,7 +59,7 @@ export async function Topbar() {
             <Link className="btn" href="/register">ثبت‌نام</Link>
             <Link className="btn btn-primary" href="/login">ورود</Link>
           </>}
-          <MobileNav links={NAV_LINKS} />
+          <MobileNav links={navLinks} />
         </div>
       </div>
     </header>

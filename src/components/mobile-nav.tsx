@@ -28,11 +28,20 @@ export function MobileNav({ links }: { links: NavLink[] }) {
         exit={{ opacity: 0, height: 0 }}
         transition={{ duration: 0.2 }}
       >
-        {links.map(({ href, label, icon }) => {
+        {links.map(({ href, label, icon, children }) => {
           const Icon = NAV_ICONS[icon];
-          return <Link key={href} href={href} onClick={() => setOpen(false)} className={pathname === href ? "active" : undefined}>
-            <Icon size={18}/><span>{label}</span>
-          </Link>;
+          return <div className="mobile-nav-group" key={href}>
+            <Link href={href} onClick={() => setOpen(false)} className={pathname === href ? "active" : undefined}>
+              <Icon size={18}/><span>{label}</span>
+            </Link>
+            {children?.length ? <div className="mobile-nav-submenu">
+              {children.map((child) => (
+                <Link key={child.href} href={child.href} onClick={() => setOpen(false)} className={pathname === child.href ? "active" : undefined}>
+                  <span>{child.label}</span>
+                </Link>
+              ))}
+            </div> : null}
+          </div>;
         })}
       </motion.nav> : null}
     </AnimatePresence>
