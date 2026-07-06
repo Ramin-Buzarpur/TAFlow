@@ -7,7 +7,7 @@ export const NAV_LINKS: NavLink[] = [
   { href: "/messages", label: "پیام‌ها", icon: "message" },
   { href: "/sessions", label: "رفع اشکال", icon: "calendar" },
   { href: "/grades", label: "نمرات", icon: "clipboard" },
-  { href: "/surveys", label: "نظرسنجی", icon: "chart" },
+  { href: "/surveys", label: "ارزیابی‌ها", icon: "chart" },
   { href: "/evaluations/professor", label: "ارزشیابی استاد", icon: "star" },
   { href: "/certificates", label: "گواهی‌ها", icon: "award" },
   { href: "/talent-pool", label: "بانک استعدادها", icon: "users" },

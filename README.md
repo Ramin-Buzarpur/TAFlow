@@ -2,6 +2,8 @@
 
 So this is the full-stack version of a TA management system I've been building. It handles the whole flow: courses, roles, TA hiring, gradebook, messaging, certificates, all of it. It's got a real database, real auth, a proper RTL frontend in Persian, and it's actually tested end-to-end, not just "works on my machine."
 
+The MVP is intentionally TA-management focused. Quizzes, forums, community/social features, event discovery, competitions, contests, leaderboards, badges, and gamification are out of scope for this release.
+
 ## Stack
 
 - Next.js App Router + TypeScript
@@ -133,9 +135,9 @@ Every permission check reads from the active `CourseRoleAssignment`, never from 
 - Bulk grade import from an `.xlsx` file (student number or email + score), with a preview step that flags bad rows (unenrolled student, invalid or out-of-range score) before anything gets written
 - Every entry, publish, and export gets logged
 
-### 7. Surveys and time polls
+### 7. TA evaluations and time polls
 
-- Course-scoped surveys
+- Course-scoped TA evaluations
 - Supports rating, text, and multiple-choice questions
 - Answers are anonymous (hashed respondent ID, not tied to the user directly)
 - Minimum response count before results are shown
@@ -294,7 +296,7 @@ pnpm test
 Covers things like:
 
 - Auth and role validation
-- Survey anonymity threshold
+- TA evaluation anonymity threshold
 - TA application status transitions
 - Persian CSV with proper BOM
 - Basic RBAC and course role checks
@@ -308,7 +310,7 @@ npx playwright install   # only needed the first time, downloads the browser
 pnpm test:e2e
 ```
 
-Needs a seeded, running database (`docker compose up -d` + `pnpm db:seed`), and `pnpm test:e2e` will spin up the dev server for you if it's not already running. Before the actual tests run, it logs in once per seeded account and saves the session (`tests/e2e/global-setup.ts`), so re-running the suite doesn't trip the login rate limiter. Covers: login/logout for all 4 roles, the whole opening → application → acceptance flow, Head TA's extra access, messaging, professor evaluations and TA surveys, announcements and the admin panel, role-based dashboards, blocked/forbidden access, and RTL/responsive/dark mode.
+Needs a seeded, running database (`docker compose up -d` + `pnpm db:seed`), and `pnpm test:e2e` will spin up the dev server for you if it's not already running. Before the actual tests run, it logs in once per seeded account and saves the session (`tests/e2e/global-setup.ts`), so re-running the suite doesn't trip the login rate limiter. Covers: login/logout for all 4 roles, the whole opening → application → acceptance flow, Head TA's extra access, messaging, professor evaluations and TA evaluations/time polls, announcements and the admin panel, role-based dashboards, blocked/forbidden access, and RTL/responsive/dark mode.
 
 One thing worth knowing: the suite runs on a single Playwright worker on purpose. Turbopack's dev server compiles routes on the fly in one process, so throwing multiple parallel workers at it causes random timeouts that have nothing to do with actual bugs — they're just compile contention. Single worker keeps it reliable.
 
