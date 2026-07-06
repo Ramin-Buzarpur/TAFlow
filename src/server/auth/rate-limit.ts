@@ -88,6 +88,25 @@ export function makeRateLimitKey(scope: string, ...parts: Array<string | null | 
   return [scope, ...parts.map((part) => part?.trim().toLowerCase() || "unknown")].join(":");
 }
 
+export async function resetRateLimitState(): Promise<void> {
+  memoryBuckets.clear();
+  const client = getRedisClient();
+  if (!client) return;
+
+  try {
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await client.scan(cursor, "MATCH", "ratelimit:*", "COUNT", 500);
+      cursor = nextCursor;
+      if (keys.length) {
+        await client.del(...keys);
+      }
+    } while (cursor !== "0");
+  } catch {
+    memoryBuckets.clear();
+  }
+}
+
 // Returns null when REDIS_URL isn't configured (in-memory fallback is active
 // by design, not a failure), true/false when it is configured and reachable/not.
 export async function checkRedisHealth(): Promise<boolean | null> {

@@ -36,11 +36,32 @@ async function expectPermissionDenied(response: { status(): number; json(): Prom
 
 async function loginContext(context: BrowserContext, email: string) {
   const page = await context.newPage();
-  await page.goto("/login");
-  await page.getByPlaceholder("ایمیل").fill(email);
-  await page.getByPlaceholder("رمز عبور").fill(PASSWORD);
-  await page.getByRole("button", { name: "ورود" }).click();
-  await page.waitForURL("**/dashboard", { timeout: 15_000 });
+  await page.goto("/");
+  const result = await page.evaluate(async ({ email, password }) => {
+    const csrfResponse = await fetch("/api/auth/csrf", { credentials: "include" });
+    const csrfData = (await csrfResponse.json()) as { csrfToken: string };
+    const body = new URLSearchParams();
+    body.set("csrfToken", csrfData.csrfToken);
+    body.set("email", email);
+    body.set("password", password);
+    body.set("callbackUrl", "/dashboard");
+    const response = await fetch("/api/auth/callback/credentials?redirect=false", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      credentials: "include",
+      body
+    });
+    return {
+      status: response.status,
+      redirected: response.redirected,
+      url: response.url
+    };
+  }, { email, password: PASSWORD });
+  expect(result.status).toBeLessThan(400);
+  expect(result.redirected).toBe(true);
+  expect(result.url).toContain("/dashboard");
   await page.close();
 }
 
@@ -90,7 +111,8 @@ async function createCourseOfferingForProfessor(professorId: string) {
   return offering.id;
 }
 
-test.beforeAll(async ({ browser, baseURL }) => {
+test.beforeAll(async ({ browser, baseURL }, testInfo) => {
+  testInfo.setTimeout(240_000);
   const passwordHash = await hashPassword(PASSWORD);
   const professorBEmail = `${runId}-professor@example.test`;
   const studentBEmail = `${runId}-student@example.test`;

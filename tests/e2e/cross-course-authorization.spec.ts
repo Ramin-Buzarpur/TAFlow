@@ -44,7 +44,7 @@ async function currentUserId(request: APIRequestContext) {
 
 async function createApiContext(playwright: ApiContextFactory, baseURL: string | undefined, state: "admin" | "professor" | "headta" | "student") {
   return playwright.request.newContext({
-    baseURL: baseURL ?? "http://localhost:3000",
+    baseURL: baseURL ?? process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
     storageState: authFile(state)
   });
 }

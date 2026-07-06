@@ -1,12 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
+import process from "node:process";
 
 function withE2eHeapLimit(existing: string | undefined) {
   if (existing?.includes("--max-old-space-size")) return existing;
   return [existing, "--max-old-space-size=6144"].filter(Boolean).join(" ");
 }
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
+const basePort = new URL(baseURL).port || "3000";
+
 const webServerEnv = {
   ...process.env,
+  AUTH_URL: baseURL,
+  PORT: basePort,
   NODE_OPTIONS: withE2eHeapLimit(process.env.NODE_OPTIONS)
 };
 
@@ -16,7 +22,7 @@ const webServer =
     : {
         command: "node ./node_modules/next/dist/bin/next dev",
         env: webServerEnv,
-        url: "http://localhost:3000",
+        url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000
       };
@@ -35,7 +41,7 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
     trace: "on-first-retry"
   },
   projects: [

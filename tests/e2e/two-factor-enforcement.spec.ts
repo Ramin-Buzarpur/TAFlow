@@ -14,6 +14,16 @@ let professorId: string;
 let secret: string;
 let recoveryCode: string;
 
+async function warmTwoFactorSetupRoute(request: import("@playwright/test").APIRequestContext) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const response = await request.post("/api/auth/2fa/required-setup", {
+      data: { email: `warm-${runId}-${attempt}@example.test`, password, label: "Warmup" }
+    });
+    if (response.status() !== 404) return;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
 async function login(page: import("@playwright/test").Page, options: { totpCode?: string; recoveryCode?: string } = {}) {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
@@ -58,7 +68,8 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test("mandatory staff 2FA blocks unrestricted login until enrollment is completed", async ({ page, request, browser }) => {
+test("mandatory staff 2FA blocks unrestricted login until enrollment is completed", async ({ page, request, browser, baseURL }) => {
+  await warmTwoFactorSetupRoute(request);
   await login(page);
   await expectNoSession(page);
 
@@ -85,32 +96,34 @@ test("mandatory staff 2FA blocks unrestricted login until enrollment is complete
   recoveryCode = confirm.recoveryCodes[0];
   await expect(prisma.user.findUniqueOrThrow({ where: { id: professorId } })).resolves.toMatchObject({ twoFactorEnabled: true });
 
-  const invalidTotpContext = await browser.newContext({ baseURL: "http://localhost:3000" });
+  const resolvedBaseURL = baseURL ?? "http://localhost:3000";
+
+  const invalidTotpContext = await browser.newContext({ baseURL: resolvedBaseURL });
   const invalidTotpPage = await invalidTotpContext.newPage();
   await login(invalidTotpPage, { totpCode: "000000" });
   await expectNoSession(invalidTotpPage);
   await invalidTotpContext.close();
 
-  const validTotpContext = await browser.newContext({ baseURL: "http://localhost:3000" });
+  const validTotpContext = await browser.newContext({ baseURL: resolvedBaseURL });
   const validTotpPage = await validTotpContext.newPage();
   await login(validTotpPage, { totpCode: authenticator.generate(secret) });
   await expectSession(validTotpPage);
   await validTotpContext.close();
 
-  const recoveryContext = await browser.newContext({ baseURL: "http://localhost:3000" });
+  const recoveryContext = await browser.newContext({ baseURL: resolvedBaseURL });
   const recoveryPage = await recoveryContext.newPage();
   await login(recoveryPage, { recoveryCode });
   await expectSession(recoveryPage);
   await recoveryContext.close();
 
-  const reusedRecoveryContext = await browser.newContext({ baseURL: "http://localhost:3000" });
+  const reusedRecoveryContext = await browser.newContext({ baseURL: resolvedBaseURL });
   const reusedRecoveryPage = await reusedRecoveryContext.newPage();
   await login(reusedRecoveryPage, { recoveryCode });
   await expectNoSession(reusedRecoveryPage);
   await reusedRecoveryContext.close();
 
   await prisma.user.update({ where: { id: professorId }, data: { status: "SUSPENDED" } });
-  const suspendedContext = await browser.newContext({ baseURL: "http://localhost:3000" });
+  const suspendedContext = await browser.newContext({ baseURL: resolvedBaseURL });
   const suspendedPage = await suspendedContext.newPage();
   await login(suspendedPage, { totpCode: authenticator.generate(secret) });
   await expectNoSession(suspendedPage);

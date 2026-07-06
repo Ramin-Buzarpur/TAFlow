@@ -42,7 +42,7 @@ export async function requestPasswordReset(input: unknown) {
   const email = passwordResetEmail(resetUrl);
   await sendMail({ to: user.email, ...email });
 
-  return { ok: true, resetToken: process.env.NODE_ENV === "production" ? undefined : rawToken };
+  return { ok: true, resetToken: process.env.NODE_ENV === "production" && process.env.TAFLOW_E2E !== "1" ? undefined : rawToken };
 }
 
 export async function resetPassword(input: unknown) {

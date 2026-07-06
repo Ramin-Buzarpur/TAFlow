@@ -1,9 +1,11 @@
+import fs from "node:fs";
 import { spawn } from "node:child_process";
+import path from "node:path";
+import net from "node:net";
 import process from "node:process";
 
 const root = process.cwd();
 const isWindows = process.platform === "win32";
-const baseUrl = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 const serverTimeoutMs = Number(process.env.E2E_SERVER_TIMEOUT_MS || 120_000);
 const runTimeoutMs = Number(process.env.E2E_RUN_TIMEOUT_MS || 10 * 60_000);
 
@@ -22,6 +24,32 @@ function spawnProcess(command, args, options = {}) {
   });
 }
 
+function parseBaseUrl(url) {
+  const parsed = new URL(url);
+  return {
+    port: Number(parsed.port || 3000)
+  };
+}
+
+async function isPortFree(port, host = "127.0.0.1") {
+  return await new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.once("error", () => resolve(false));
+    server.listen({ port, host, exclusive: true }, () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+async function pickBaseUrl() {
+  if (process.env.PLAYWRIGHT_BASE_URL) return process.env.PLAYWRIGHT_BASE_URL;
+  for (let port = 3000; port <= 3010; port += 1) {
+    if (await isPortFree(port)) return `http://localhost:${port}`;
+  }
+  return "http://localhost:3011";
+}
+
 async function waitForServer(child) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < serverTimeoutMs) {
@@ -36,6 +64,24 @@ async function waitForServer(child) {
     }
   }
   throw new Error(`E2E server did not become ready at ${baseUrl} within ${serverTimeoutMs}ms`);
+}
+
+async function buildApp() {
+  fs.rmSync(path.join(root, ".next"), { recursive: true, force: true });
+  const child = spawnProcess("node", ["./node_modules/next/dist/bin/next", "build"], {
+    env: {
+      ...process.env,
+      NODE_OPTIONS: withHeap(process.env.NODE_OPTIONS)
+    }
+  });
+
+  return await new Promise((resolve, reject) => {
+    child.once("exit", (code, signal) => {
+      if (signal || (code ?? 1) !== 0) reject(new Error(`E2E build failed with code ${code ?? 1}`));
+      else resolve();
+    });
+    child.once("error", reject);
+  });
 }
 
 function terminate(child) {
@@ -79,6 +125,8 @@ function runPlaywright() {
   const child = spawnProcess("node", args, {
     env: {
       ...process.env,
+      AUTH_URL: baseUrl,
+      PLAYWRIGHT_BASE_URL: baseUrl,
       PLAYWRIGHT_SKIP_WEB_SERVER: "1",
       NODE_OPTIONS: withHeap(process.env.NODE_OPTIONS)
     }
@@ -102,9 +150,16 @@ function runPlaywright() {
   });
 }
 
-const server = spawnProcess("node", ["./node_modules/next/dist/bin/next", "dev"], {
+const baseUrl = await pickBaseUrl();
+const { port } = parseBaseUrl(baseUrl);
+
+await buildApp();
+
+const server = spawnProcess("node", ["./node_modules/next/dist/bin/next", "start", "-p", String(port)], {
   env: {
     ...process.env,
+    AUTH_URL: baseUrl,
+    PORT: String(port),
     TAFLOW_E2E: "1",
     NODE_OPTIONS: withHeap(process.env.NODE_OPTIONS)
   }
