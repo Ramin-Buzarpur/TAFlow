@@ -84,9 +84,6 @@ export default async function DashboardPage() {
                 <Link className="btn" href="/courses">
                   درس‌ها
                 </Link>
-                <Link className="btn" href="/profile">
-                  پروفایل
-                </Link>
               </div>
 
               <div className="dashboard-hero__chips">

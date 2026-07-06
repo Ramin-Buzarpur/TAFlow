@@ -38,6 +38,10 @@ export function UserMenu({ name, email, role }: { name: string | null; email: st
           <LayoutDashboard size={16} />
           <span>داشبورد</span>
         </Link>
+        <Link href="/profile" className="user-menu__item">
+          <UserRound size={16} />
+          <span>پروفایل</span>
+        </Link>
         <Link href="/settings" className="user-menu__item">
           <Settings size={16} />
           <span>تنظیمات</span>
