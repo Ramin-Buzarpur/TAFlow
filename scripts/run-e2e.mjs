@@ -67,7 +67,12 @@ async function waitForServer(child) {
 }
 
 async function buildApp() {
-  fs.rmSync(path.join(root, ".next"), { recursive: true, force: true });
+  fs.rmSync(path.join(root, ".next"), {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 200
+  });
   const child = spawnProcess("node", ["./node_modules/next/dist/bin/next", "build"], {
     env: {
       ...process.env,

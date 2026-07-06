@@ -108,7 +108,7 @@ export default async function ReportsPage() {
       <Card>
         <h2>گفت‌وگوها</h2>
         <div className="stack">
-          <div className="list-row"><span>تعداد threadهای پیام</span><strong>{report.totalThreads}</strong></div>
+          <div className="list-row"><span>تعداد threadهای گفت‌وگو</span><strong>{report.totalThreads}</strong></div>
           <p className="muted">این شاخص هنوز به timeline و exportهای پیشرفته‌تر گسترش پیدا می‌کند.</p>
         </div>
       </Card>

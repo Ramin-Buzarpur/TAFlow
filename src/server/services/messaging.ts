@@ -27,7 +27,8 @@ export async function createThread(actorId: string, input: { courseOfferingId?: 
     },
     include: { participants: true, messages: true }
   });
-  for (const userId of uniqueParticipants.filter((id) => id !== actorId)) await notifyUser({ userId, type: "MESSAGE", title: "پیام جدید", body: input.subject, href: `/messages/${thread.id}` });
+  const threadHref = input.courseOfferingId ? `/courses/${input.courseOfferingId}` : "/dashboard";
+  for (const userId of uniqueParticipants.filter((id) => id !== actorId)) await notifyUser({ userId, type: "MESSAGE", title: "پیام جدید", body: input.subject, href: threadHref });
   return thread;
 }
 
@@ -129,7 +130,8 @@ export async function replyThread(actorId: string, threadId: string, body: strin
   if (!thread.participants.some((p) => p.userId === actorId)) throw new PermissionError();
   const message = await db.message.create({ data: { threadId, senderId: actorId, body: cleanText(body) } });
   await db.messageThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } });
-  for (const p of thread.participants.filter((p) => p.userId !== actorId)) await notifyUser({ userId: p.userId, type: "MESSAGE", title: "پاسخ جدید", body: thread.subject, href: `/messages/${threadId}` });
+  const threadHref = thread.courseOfferingId ? `/courses/${thread.courseOfferingId}` : "/dashboard";
+  for (const p of thread.participants.filter((p) => p.userId !== actorId)) await notifyUser({ userId: p.userId, type: "MESSAGE", title: "پاسخ جدید", body: thread.subject, href: threadHref });
   return message;
 }
 

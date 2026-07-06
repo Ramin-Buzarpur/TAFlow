@@ -12,7 +12,7 @@ async function firstCourseOfferingId(request: APIRequestContext) {
 test.describe("professor", () => {
   test.use({ storageState: authFile("professor") });
 
-  test("can search and filter the talent pool", async ({ browser, page }) => {
+  test("talent pool route redirects into the opportunities module", async ({ browser, page }) => {
     const courseOfferingId = await firstCourseOfferingId(page.request);
     const marker = `talent-${Date.now()}`;
 
@@ -50,25 +50,18 @@ test.describe("professor", () => {
     }
 
     await page.goto("/talent-pool");
-    await expect(page.getByRole("heading", { name: "بانک استعدادها" })).toBeVisible();
-    await page.locator('input[name="q"]').fill(marker);
-    await page.locator('select[name="status"]').selectOption("REJECTED");
-    await page.locator('select[name="sort"]').selectOption("score");
-    await page.getByRole("button", { name: "اعمال" }).click();
-
-    const result = page.getByTestId(`talent-pool-item-${application.id}`);
-    await expect(result).toBeVisible();
-    await expect(result).toContainText(marker);
-    await expect(result).toContainText("REJECTED");
-    await expect(result.getByRole("link", { name: "جزئیات درخواست" })).toBeVisible();
+    await expect(page).toHaveURL(/\/opportunities/);
+    await expect(page.getByRole("heading", { name: "فرصت‌های TA" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "ایجاد فرصت جدید" })).toBeVisible();
   });
 });
 
 test.describe("student", () => {
   test.use({ storageState: authFile("student") });
 
-  test("cannot access the talent pool", async ({ page }) => {
+  test("talent pool route is absorbed into opportunities", async ({ page }) => {
     await page.goto("/talent-pool");
-    await expect(page.getByRole("heading", { name: "دسترسی محدود" })).toBeVisible();
+    await expect(page).toHaveURL(/\/opportunities/);
+    await expect(page.getByRole("heading", { name: "فرصت‌های TA" })).toBeVisible();
   });
 });

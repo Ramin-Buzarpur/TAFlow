@@ -16,11 +16,10 @@ export default async function ResetPasswordPage({ searchParams }: { searchParams
       <main className="shell">
         <Card style={{ marginTop: 40 }}>
           <h1>بازنشانی رمز عبور</h1>
-          <p className="muted">رمز جدید را با همان لینک زمان‌دار وارد کنید. اگر لینک معتبر نباشد، پیام امن نمایش داده می‌شود.</p>
+          <p className="muted">رمز جدید را با همان لینک زمان‌دار وارد کنید. اگر لینک معتبر نباشد، هشدار امن نمایش داده می‌شود.</p>
           <ResetPasswordForm initialEmail={query.email || ""} initialToken={query.token || ""} returnTo={returnTo} />
         </Card>
       </main>
     </>
   );
 }
-

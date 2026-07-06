@@ -15,7 +15,7 @@ for (const account of ACCOUNTS) {
     await page.getByPlaceholder("رمز عبور").fill(PASSWORD);
     await page.getByRole("button", { name: "ورود" }).click();
     await page.waitForURL("**/dashboard", { timeout: 15_000 });
-    await expect(page.getByRole("heading", { name: "داشبورد نقش‌محور" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "خلاصه‌ی روز شما در یک نگاه" })).toBeVisible();
   });
 }
 

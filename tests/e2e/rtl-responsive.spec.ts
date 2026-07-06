@@ -16,10 +16,14 @@ test.describe("student", () => {
   });
 });
 
-test("dark mode toggle switches the theme attribute and persists across reload", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "تغییر حالت روشن و تاریک" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+test.describe("student", () => {
+  test.use({ storageState: authFile("student") });
+
+  test("dark mode toggle switches the theme attribute and persists across reload", async ({ page }) => {
+    await page.goto("/dashboard");
+    await page.locator(".theme-toggle").click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  });
 });

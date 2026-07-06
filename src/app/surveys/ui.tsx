@@ -35,7 +35,7 @@ export function SurveyBuilder({ offerings }: { offerings: { id: string; title: s
     </select>
     <input className="input" name="title" placeholder="عنوان ارزیابی" required />
     <select className="select" name="type" defaultValue="COURSE_FEEDBACK">
-      <option value="PROFESSOR_EVALUATION">ارزشیابی استاد</option>
+      <option value="PROFESSOR_EVALUATION">ارزشیابی</option>
       <option value="TA_MIDTERM">ارزشیابی TA (میان‌ترم)</option>
       <option value="TA_FINAL">ارزشیابی TA (پایان‌ترم)</option>
       <option value="COURSE_FEEDBACK">بازخورد درس</option>

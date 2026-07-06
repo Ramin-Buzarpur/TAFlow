@@ -57,7 +57,11 @@ export async function dashboardSummary(userId: string) {
   await notifyUpcomingDeadlines(userId);
   const user = await db.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, globalRole: true } });
   const [myRoles, myApplications, sessions, notifications, announcements, unreadMessages] = await Promise.all([
-    db.courseRoleAssignment.findMany({ where: { userId, revokedAt: null }, include: { courseOffering: { include: { course: true, semester: true } } }, take: 10 }),
+    db.courseRoleAssignment.findMany({
+      where: { userId, revokedAt: null },
+      include: { courseOffering: { include: { course: true, semester: true, professor: { select: { name: true, email: true } } } } },
+      take: 10
+    }),
     db.tAApplication.findMany({ where: { applicantId: userId }, include: { opportunity: { include: { courseOffering: { include: { course: true } } } } }, orderBy: { submittedAt: "desc" }, take: 5 }),
     db.officeHourSession.findMany({ where: { startsAt: { gte: new Date() }, courseOffering: { OR: [{ enrollments: { some: { studentId: userId } } }, { roles: { some: { userId, revokedAt: null } } }] } }, include: { courseOffering: { include: { course: true } }, host: { select: { name: true } } }, orderBy: { startsAt: "asc" }, take: 5 }),
     db.notification.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 5 }),
