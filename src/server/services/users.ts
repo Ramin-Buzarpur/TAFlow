@@ -162,7 +162,7 @@ export type UserSafeSelect = Prisma.UserGetPayload<{
 export async function getMyProfile(userId: string) {
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, globalRole: true, status: true, timezone: true, twoFactorEnabled: true, studentProfile: true, professorProfile: true }
+    select: { id: true, name: true, email: true, globalRole: true, status: true, timezone: true, twoFactorEnabled: true, twoFactorRequired: true, twoFactorChangedAt: true, studentProfile: true, professorProfile: true }
   });
   if (!user) throw new AppError("NOT_FOUND", "User not found", 404);
   return user;

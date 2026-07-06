@@ -5,6 +5,15 @@ const globalForMailer = globalThis as unknown as { mailTransport?: nodemailer.Tr
 
 function transport() {
   if (globalForMailer.mailTransport) return globalForMailer.mailTransport;
+  if (process.env.TAFLOW_E2E === "1") {
+    const t = nodemailer.createTransport({
+      streamTransport: true,
+      buffer: true,
+      newline: "unix"
+    });
+    globalForMailer.mailTransport = t;
+    return t;
+  }
   const user = process.env.SMTP_USER || undefined;
   const pass = process.env.SMTP_PASSWORD || undefined;
   const t = nodemailer.createTransport({
