@@ -106,7 +106,7 @@ export default async function CoursePanel({ params }: { params: Promise<{ course
           <Card>
             <h2>لینک‌های عملیاتی</h2>
             <div className="stack">
-              <Link className="btn" href={`/gradebook/${courseOfferingId}`}>دفتر نمرات</Link>
+              <Link className="btn" href={`/courses/${courseOfferingId}/grading`}>دفتر نمرات</Link>
               <Link className="btn" href={`/courses/${courseOfferingId}/tasks`}>مدیریت وظایف تیم TA</Link>
               <Link className="btn" href={`/api/exports/roster/${courseOfferingId}`}>خروجی اعضای کلاس</Link>
               <Link className="btn" href={`/courses/${courseOfferingId}/sessions`}>جلسات رفع اشکال</Link>
