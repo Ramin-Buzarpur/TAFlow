@@ -332,19 +332,59 @@ export async function scheduleApplicationInterview(actorId: string, input: {
   return interview;
 }
 
-export async function listTalentPool(actorId: string, opts: { skip?: number; take?: number } = {}) {
+export async function listTalentPool(
+  actorId: string,
+  opts: { q?: string; status?: "REJECTED" | "WITHDRAWN"; sort?: "recent" | "score" | "course"; take?: number } = {}
+) {
   const user = await db.user.findUnique({ where: { id: actorId }, select: { globalRole: true } });
   if (!user || !["PROFESSOR", "EDUCATION_ADMIN", "SYSTEM_ADMIN"].includes(user.globalRole)) throw new PermissionError();
-  return db.tAApplication.findMany({
-    where: { status: { in: ["REJECTED", "WITHDRAWN"] } },
+
+  const rows = await db.tAApplication.findMany({
+    where: {
+      status: opts.status ?? { in: ["REJECTED", "WITHDRAWN"] }
+    },
     include: {
       applicant: { select: { id: true, name: true, email: true, studentProfile: true } },
       opportunity: { include: { courseOffering: { include: { course: true, semester: true } } } }
     },
-    orderBy: { submittedAt: "desc" },
-    skip: opts.skip,
-    take: opts.take ?? 50
+    orderBy: [{ submittedAt: "desc" }],
+    take: Math.max(opts.take ?? 50, 50)
   });
+
+  const q = opts.q?.trim().toLowerCase();
+  const filtered = q
+    ? rows.filter((row) => {
+        const haystack = [
+          row.applicant.name,
+          row.applicant.email,
+          row.applicant.studentProfile?.studentNumber,
+          row.motivationText,
+          row.opportunity.title,
+          row.opportunity.description,
+          row.opportunity.courseOffering.course.title,
+          row.opportunity.courseOffering.course.code
+        ]
+          .filter((value): value is string => typeof value === "string" && value.length > 0)
+          .some((value) => value.toLowerCase().includes(q));
+        return haystack;
+      })
+    : rows;
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (opts.sort === "score") {
+      const scoreA = a.score === null ? -1 : Number(a.score);
+      const scoreB = b.score === null ? -1 : Number(b.score);
+      return scoreB - scoreA || b.submittedAt.getTime() - a.submittedAt.getTime();
+    }
+    if (opts.sort === "course") {
+      const courseA = a.opportunity.courseOffering.course.title.localeCompare(b.opportunity.courseOffering.course.title, "fa");
+      if (courseA !== 0) return courseA;
+      return b.submittedAt.getTime() - a.submittedAt.getTime();
+    }
+    return b.submittedAt.getTime() - a.submittedAt.getTime();
+  });
+
+  return sorted.slice(0, opts.take ?? 50);
 }
 
 export async function submitApplicationReview(actorId: string, input: {
