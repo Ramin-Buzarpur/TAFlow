@@ -82,9 +82,9 @@
 |---|---|---|
 | `pnpm test:integration` | PASS | 1 file, 8 tests. Validates semester and office-hour date ranges, grade bounds, nullable-section course offering uniqueness, active enrollment/course-role history, anonymous poll votes, survey answers, certificate requests, and regrade requests. |
 
-### Remaining known gap
+### Resolved
 
-- `GradeRecord.score >= 0` is enforced at the database layer. `GradeRecord.score <= GradeItem.maxScore` still needs a durable policy decision and implementation because the upper bound depends on a related `GradeItem` row.
+- `GradeRecord.score <= GradeItem.maxScore` is now enforced durably at the database layer by a trigger on grade-record writes plus a guard against lowering `GradeItem.maxScore` below existing records. The regression suite covers both insert/update rejection and item max-score reductions.
 
 ## Phase 2 authorization validation - 2026-07-05
 

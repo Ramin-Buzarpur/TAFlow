@@ -191,6 +191,37 @@ describe("database integrity constraints", () => {
         }
       })
     );
+    await expectDbRejection(
+      prisma.gradeRecord.create({
+        data: {
+          gradeItemId: item.id,
+          studentId,
+          editedById: professorId,
+          score: 21
+        }
+      })
+    );
+
+    const record = await prisma.gradeRecord.create({
+      data: {
+        gradeItemId: item.id,
+        studentId,
+        editedById: professorId,
+        score: 18
+      }
+    });
+    await expectDbRejection(
+      prisma.gradeRecord.update({
+        where: { id: record.id },
+        data: { score: 21 }
+      })
+    );
+    await expectDbRejection(
+      prisma.gradeItem.update({
+        where: { id: item.id },
+        data: { maxScore: 17 }
+      })
+    );
   });
 
   it("enforces active-only uniqueness while preserving history", async () => {
