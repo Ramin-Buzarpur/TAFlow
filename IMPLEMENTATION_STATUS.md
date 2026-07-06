@@ -36,6 +36,7 @@ This file tracks implementation state against `10.tex` and the real repository.
 | Password reset UX | PARTIAL | API exists; dedicated UI flow still needs completion. |
 | TOTP 2FA UX | PARTIAL | Backend/API exist; setup/verification UI still needs completion. |
 | Course-scoped RBAC | COMPLETE | Service-layer permission model is covered by API-level E2E tests, including cross-course isolation. |
+| Course role management UI | COMPLETE | `src/app/courses/[courseOfferingId]/roles/page.tsx` and `src/app/courses/[courseOfferingId]/roles/ui.tsx` provide a course-specific assignment/update/revoke workflow, and `tests/e2e/course-role-management.spec.ts` covers the professor/admin happy path. |
 | TA hiring workflow | COMPLETE_BUT_UNVERIFIED | Core workflow exists; file upload dependency is now restored. |
 | Storage and uploads | COMPLETE | Adapter and MinIO health path are validated; file upload, attachment ownership, download authorization, object-key handling, and delete ownership are covered by E2E file-security regression tests. |
 | Certificates and PDF persistence | COMPLETE_BUT_UNVERIFIED | Storage dependency restored; certificate issue/verify still needs deeper functional coverage beyond the current E2E suite. |
